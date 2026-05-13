@@ -33,7 +33,8 @@ class YOLOPreprocessor {
             length: MemoryLayout<YOLOPreprocessUniforms>.stride,
             options: .storageModeShared
         )!
-        memcpy(uniformsBuffer.contents(), &self.uniforms, MemoryLayout<YOLOPreprocessUniforms>.stride)
+        var u = self.uniforms
+        memcpy(uniformsBuffer.contents(), &u, MemoryLayout<YOLOPreprocessUniforms>.stride)
 
         let size = Config.yoloInputSize
         let rowBytes = size * 4

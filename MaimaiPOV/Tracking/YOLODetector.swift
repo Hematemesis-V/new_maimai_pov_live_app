@@ -79,7 +79,7 @@ class YOLODetector {
         guard let input = try? bestInput(
             image: pixelBuffer,
             iouThreshold: 0.45,
-            confidenceThreshold: Config.defaultConfidenceThreshold
+            confidenceThreshold: Double(Config.defaultConfidenceThreshold)
         ) else { return nil }
         guard let output = try? model.prediction(input: input) else { return nil }
 
@@ -100,8 +100,11 @@ class YOLODetector {
         var bestIdx = -1
 
         let confPtr = UnsafeMutablePointer<Float>(OpaquePointer(confidence.dataPointer))
+        let stride = numClasses
         for i in 0..<numBoxes {
-            let c = confPtr[i * numClasses + innerClass]
+            let idx = i * stride + innerClass
+            guard idx >= 0 && idx < confidence.count else { continue }
+            let c = confPtr[idx]
             if c >= confThresh && c > bestConf {
                 bestConf = c
                 bestIdx = i

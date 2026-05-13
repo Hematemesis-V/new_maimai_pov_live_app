@@ -11,7 +11,8 @@ class YOLOPreprocessor {
 
     private(set) var outputTexture: MTLTexture
     private var readbackBuffer: MTLBuffer
-    private var reusablePixelBuffer: CVPixelBuffer?
+    private var pixelBuffers: [CVPixelBuffer] = []
+    private var bufferIndex: Int = 0
 
     let yoloSize: Int
 
@@ -60,23 +61,22 @@ class YOLOPreprocessor {
         ) else { return nil }
         self.outputTexture = tex
 
-        createReusablePixelBuffer()
-    }
-
-    private func createReusablePixelBuffer() {
-        let size = yoloSize
-        var pb: CVPixelBuffer?
-        let attrs: [String: Any] = [
-            kCVPixelBufferIOSurfacePropertiesKey as String: [:] as [String: Any]
-        ]
-        CVPixelBufferCreate(
-            kCFAllocatorDefault,
-            size, size,
-            kCVPixelFormatType_32BGRA,
-            attrs as CFDictionary,
-            &pb
-        )
-        self.reusablePixelBuffer = pb
+        for _ in 0..<3 {
+            var pb: CVPixelBuffer?
+            let attrs: [String: Any] = [
+                kCVPixelBufferIOSurfacePropertiesKey as String: [:] as [String: Any]
+            ]
+            CVPixelBufferCreate(
+                kCFAllocatorDefault,
+                size, size,
+                kCVPixelFormatType_32BGRA,
+                attrs as CFDictionary,
+                &pb
+            )
+            if let pb = pb {
+                pixelBuffers.append(pb)
+            }
+        }
     }
 
     func updatePadding(_ padding: Int) {
@@ -102,11 +102,14 @@ class YOLOPreprocessor {
         cmdBuf.commit()
         cmdBuf.waitUntilCompleted()
 
-        return copyToReusablePixelBuffer()
+        return copyToNextPixelBuffer()
     }
 
-    private func copyToReusablePixelBuffer() -> CVPixelBuffer? {
-        guard let pb = reusablePixelBuffer else { return nil }
+    private func copyToNextPixelBuffer() -> CVPixelBuffer? {
+        guard !pixelBuffers.isEmpty else { return nil }
+        bufferIndex = (bufferIndex + 1) % pixelBuffers.count
+        let pb = pixelBuffers[bufferIndex]
+
         let size = yoloSize
         let srcRowBytes = size * 4
 

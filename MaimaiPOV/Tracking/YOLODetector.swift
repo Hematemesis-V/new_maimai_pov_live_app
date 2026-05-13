@@ -23,21 +23,41 @@ class YOLODetector {
     private let model: best
     private var uniforms: YOLOPreprocessUniforms
     private let yoloQueue = DispatchQueue(label: "com.maimai.yolo", qos: .userInitiated)
-    private var latestTexture: MTLTexture?
-    private let textureLock = NSLock()
     private var running = false
     private let semaphore = DispatchSemaphore(value: 0)
     private let preprocessor: YOLOPreprocessor
 
+    private let device: MTLDevice
+    private let stagingCommandQueue: MTLCommandQueue
+    private let stagingTexture: MTLTexture
+    private var stagingReady = false
+    private let stagingLock = NSLock()
+
     var onDetection: ((DetectionResult) -> Void)?
 
     init?(device: MTLDevice) {
+        self.device = device
         guard let m = try? best(configuration: MLModelConfiguration()) else { return nil }
         self.model = m
         self.uniforms = YOLOPreprocessUniforms(padding: Config.yoloPadding)
 
         guard let prep = YOLOPreprocessor(device: device) else { return nil }
         self.preprocessor = prep
+
+        guard let queue = device.makeCommandQueue() else { return nil }
+        self.stagingCommandQueue = queue
+
+        let desc = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .rgba8Unorm,
+            width: Config.stabWidth,
+            height: Config.stabHeight,
+            mipmapped: false
+        )
+        desc.usage = .shaderRead
+        desc.storageMode = .private
+
+        guard let tex = device.makeTexture(descriptor: desc) else { return nil }
+        self.stagingTexture = tex
     }
 
     func start() {
@@ -54,9 +74,27 @@ class YOLODetector {
     }
 
     func enqueue(stabTexture: MTLTexture) {
-        textureLock.lock()
-        latestTexture = stabTexture
-        textureLock.unlock()
+        guard let cmdBuf = stagingCommandQueue.makeCommandBuffer(),
+              let blit = cmdBuf.makeBlitCommandEncoder() else { return }
+
+        blit.copy(
+            from: stabTexture,
+            sourceSlice: 0,
+            sourceLevel: 0,
+            sourceOrigin: MTLOrigin(x: 0, y: 0, z: 0),
+            sourceSize: MTLSize(width: stabTexture.width, height: stabTexture.height, depth: 1),
+            to: stagingTexture,
+            destinationSlice: 0,
+            destinationLevel: 0,
+            destinationOrigin: MTLOrigin(x: 0, y: 0, z: 0)
+        )
+        blit.endEncoding()
+        cmdBuf.commit()
+
+        stagingLock.lock()
+        stagingReady = true
+        stagingLock.unlock()
+
         while semaphore.wait(timeout: .now()) == .success {}
         semaphore.signal()
     }
@@ -70,16 +108,15 @@ class YOLODetector {
         while running {
             semaphore.wait()
 
-            textureLock.lock()
-            guard let texture = latestTexture else {
-                textureLock.unlock()
-                continue
-            }
-            latestTexture = nil
-            textureLock.unlock()
+            stagingLock.lock()
+            let ready = stagingReady
+            stagingReady = false
+            stagingLock.unlock()
+
+            guard ready else { continue }
 
             let prepStart = CACurrentMediaTime()
-            guard let pixelBuffer = preprocessor.process(stabOutputTexture: texture) else { continue }
+            guard let pixelBuffer = preprocessor.process(stabOutputTexture: stagingTexture) else { continue }
             let prepElapsed = CACurrentMediaTime() - prepStart
 
             let result = infer(pixelBuffer, preprocessMs: prepElapsed * 1000.0)
@@ -147,7 +184,7 @@ class YOLODetector {
         let rawW = nw * yoloSize
         let rawH = nh * yoloSize
 
-        if rawW < 1.0 || rawH < 1.0 {
+        if rawW < 5.0 || rawH < 5.0 || rawCx < 0 || rawCx > yoloSize || rawCy < 0 || rawCy > yoloSize {
             return DetectionResult(
                 detected: false, confidence: bestConf,
                 stabCx: 0, stabCy: 0, stabW: 0, stabH: 0,

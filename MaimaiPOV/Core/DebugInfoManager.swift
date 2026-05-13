@@ -25,6 +25,8 @@ class DebugInfoManager: ObservableObject {
     @Published var yoloUniforms: String = "--"
     @Published var yoloRawNorm: String = "--"
     @Published var yoloBoxesInfo: String = "--"
+    @Published var yoloTopBoxes: String = "--"
+    @Published var yoloBestRank: Int = 0
 
     @Published var trackCx: Float = 0
     @Published var trackCy: Float = 0

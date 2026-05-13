@@ -24,6 +24,8 @@ class YOLODetector {
         var preprocessMs: Double
         var allBoxesCount: Int
         var innerScreenBoxesCount: Int
+        var topBoxes: String
+        var bestBoxRank: Int
     }
 
     private let model: best
@@ -167,21 +169,63 @@ class YOLODetector {
         let confThresh = Config.defaultConfidenceThreshold
         let yoloSize = Float(Config.yoloInputSize)
 
-        var bestConf: Float = 0
-        var bestIdx = -1
-        var innerScreenCount = 0
-
         let confPtr = UnsafeMutablePointer<Float>(OpaquePointer(confidence.dataPointer))
+        let coordPtr = UnsafeMutablePointer<Float>(OpaquePointer(coordinates.dataPointer))
         let confStride = numClasses
+
+        struct BoxInfo {
+            let index: Int
+            let conf: Float
+            let nx: Float
+            let ny: Float
+            let nw: Float
+            let nh: Float
+            let area: Float
+        }
+
+        var innerBoxes: [BoxInfo] = []
+
         for i in 0..<numBoxes {
             let idx = i * confStride + innerClass
             guard idx < confidence.count else { continue }
             let c = confPtr[idx]
             if c >= confThresh {
-                innerScreenCount += 1
-                if c > bestConf {
-                    bestConf = c
-                    bestIdx = i
+                let nx = coordPtr[i * 4 + 0]
+                let ny = coordPtr[i * 4 + 1]
+                let nw = coordPtr[i * 4 + 2]
+                let nh = coordPtr[i * 4 + 3]
+                let area = nw * nh
+                innerBoxes.append(BoxInfo(index: i, conf: c, nx: nx, ny: ny, nw: nw, nh: nh, area: area))
+            }
+        }
+
+        let innerScreenCount = innerBoxes.count
+
+        let sortedByArea = innerBoxes.sorted { $0.area > $1.area }
+
+        var topBoxesStr = ""
+        for (rank, box) in sortedByArea.prefix(3).enumerated() {
+            if rank > 0 { topBoxesStr += " " }
+            topBoxesStr += String(format: "%d:%.2f,%.2f,%.2f,%.2f,c%.2f",
+                rank + 1, box.nx, box.ny, box.nw, box.nh, box.conf)
+        }
+        if topBoxesStr.isEmpty { topBoxesStr = "--" }
+
+        var bestConf: Float = 0
+        var bestIdx = -1
+        for box in innerBoxes {
+            if box.conf > bestConf {
+                bestConf = box.conf
+                bestIdx = box.index
+            }
+        }
+
+        var bestBoxRank = 0
+        if bestIdx >= 0 {
+            for (rank, box) in sortedByArea.enumerated() {
+                if box.index == bestIdx {
+                    bestBoxRank = rank + 1
+                    break
                 }
             }
         }
@@ -193,11 +237,11 @@ class YOLODetector {
                 rawYoloCx: 0, rawYoloCy: 0, rawYoloW: 0, rawYoloH: 0,
                 rawNx: 0, rawNy: 0, rawNw: 0, rawNh: 0,
                 inferenceMs: elapsed * 1000.0, preprocessMs: preprocessMs,
-                allBoxesCount: numBoxes, innerScreenBoxesCount: 0
+                allBoxesCount: numBoxes, innerScreenBoxesCount: 0,
+                topBoxes: topBoxesStr, bestBoxRank: 0
             )
         }
 
-        let coordPtr = UnsafeMutablePointer<Float>(OpaquePointer(coordinates.dataPointer))
         let nx = coordPtr[bestIdx * 4 + 0]
         let ny = coordPtr[bestIdx * 4 + 1]
         let nw = coordPtr[bestIdx * 4 + 2]
@@ -215,7 +259,8 @@ class YOLODetector {
                 rawYoloCx: rawCx, rawYoloCy: rawCy, rawYoloW: rawW, rawYoloH: rawH,
                 rawNx: nx, rawNy: ny, rawNw: nw, rawNh: nh,
                 inferenceMs: elapsed * 1000.0, preprocessMs: preprocessMs,
-                allBoxesCount: numBoxes, innerScreenBoxesCount: innerScreenCount
+                allBoxesCount: numBoxes, innerScreenBoxesCount: innerScreenCount,
+                topBoxes: topBoxesStr, bestBoxRank: bestBoxRank
             )
         }
 
@@ -230,7 +275,8 @@ class YOLODetector {
             rawYoloCx: rawCx, rawYoloCy: rawCy, rawYoloW: rawW, rawYoloH: rawH,
             rawNx: nx, rawNy: ny, rawNw: nw, rawNh: nh,
             inferenceMs: elapsed * 1000.0, preprocessMs: preprocessMs,
-            allBoxesCount: numBoxes, innerScreenBoxesCount: innerScreenCount
+            allBoxesCount: numBoxes, innerScreenBoxesCount: innerScreenCount,
+            topBoxes: topBoxesStr, bestBoxRank: bestBoxRank
         )
     }
 }

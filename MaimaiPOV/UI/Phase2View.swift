@@ -411,6 +411,8 @@ struct Phase2View: View {
                     debug?.yoloRawNorm = String(format: "%.3f,%.3f,%.3f,%.3f",
                         result.rawNx, result.rawNy, result.rawNw, result.rawNh)
                     debug?.yoloBoxesInfo = "\(result.innerScreenBoxesCount)/\(result.allBoxesCount)"
+                    debug?.yoloTopBoxes = result.topBoxes
+                    debug?.yoloBestRank = result.bestBoxRank
                     if result.detected {
                         debug?.yoloRawCoord = String(format: "%.0f,%.0f,%.0f,%.0f",
                             result.rawYoloCx, result.rawYoloCy, result.rawYoloW, result.rawYoloH)

@@ -13,7 +13,7 @@ class MetalStabilizer {
     private var textureCache: CVMetalTextureCache
     private(set) var outputTexture: MTLTexture
 
-    private let gpuEvent: MTLEvent
+    private let gpuEvent: MTLSharedEvent
     private var eventValue: UInt64 = 0
 
     private var readbackBuffer: MTLBuffer?
@@ -76,7 +76,7 @@ class MetalStabilizer {
         guard let outTex = device.makeTexture(descriptor: texDesc) else { return nil }
         self.outputTexture = outTex
 
-        guard let event = device.makeEvent() else { return nil }
+        guard let event = device.makeSharedEvent() else { return nil }
         self.gpuEvent = event
 
         setupReadbackResources()

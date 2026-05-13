@@ -1,0 +1,44 @@
+import Foundation
+
+@MainActor
+class DebugInfoManager: ObservableObject {
+    static let shared = DebugInfoManager()
+
+    @Published var fps: Double = 0
+    @Published var stabLagMs: Double = 0
+    @Published var yoloLagMs: Double = 0
+    @Published var frameCount: Int = 0
+
+    @Published var fov: Float = 0
+    @Published var distRatio: Float = 0
+    @Published var stabEnabled: Bool = true
+    @Published var lensType: String = "main"
+
+    @Published var yoloDetected: Bool = false
+    @Published var yoloConfidence: Float = 0
+    @Published var yoloBbox: String = "--"
+    @Published var yoloInferenceMs: Double = 0
+
+    @Published var trackCx: Float = 0
+    @Published var trackCy: Float = 0
+    @Published var trackCropH: Float = 0
+    @Published var trackState: String = "idle"
+
+    @Published var logMessages: [String] = []
+    private let maxLogMessages = 30
+
+    private let timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm:ss.SSS"
+        return f
+    }()
+
+    func log(_ msg: String) {
+        let timestamp = timeFormatter.string(from: Date())
+        let entry = "[\(timestamp)] \(msg)"
+        logMessages.append(entry)
+        if logMessages.count > maxLogMessages {
+            logMessages.removeFirst(logMessages.count - maxLogMessages)
+        }
+    }
+}

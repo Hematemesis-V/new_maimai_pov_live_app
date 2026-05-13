@@ -1,0 +1,62 @@
+name: MaimaiPOV
+options:
+  bundleIdPrefix: com.maimai
+  deploymentTarget:
+    iOS: "17.0"
+  generateEmptyDirectories: true
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    TARGETED_DEVICE_FAMILY: "1"
+    IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+    GENERATE_INFOPLIST_FILE: NO
+    INFOPLIST_FILE: MaimaiPOV/App/Info.plist
+    METAL_LIBRARY_FILE_BASE: default
+    COREML_CODEGEN_LANGUAGE: Swift
+    OTHER_LDFLAGS: ["-ObjC"]
+    ENABLE_BITCODE: NO
+    DEAD_CODE_STRIPPING: YES
+
+targets:
+  MaimaiPOV:
+    type: application
+    platform: iOS
+    sources:
+      - path: MaimaiPOV
+        excludes:
+          - "**/*.onnx"
+          - "**/*.pt"
+          - "**/*.zip"
+          - "Tracking/Models/convert_coreml.py"
+      # Phase 3: uncomment when Core ML model is added
+      # - path: MaimaiPOV/Tracking/Models/maimai_bbox_v1.mlpackage
+      #   buildPhase: sources
+      #   type: folder
+      #   settings:
+      #     base:
+      #       CODE_GEN: class
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.maimai.MaimaiPOV
+        INFOPLIST_FILE: MaimaiPOV/App/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_IDENTITY: ""
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGNING_ALLOWED: NO
+        DEVELOPMENT_TEAM: ""
+        ARCHS: arm64
+        VALID_ARCHS: arm64
+        ONLY_ACTIVE_ARCH: YES
+        SWIFT_OPTIMIZATION_LEVEL: "-O"
+        SWIFT_COMPILATION_MODE: wholemodule
+        MTLENGINE_DEFAULT_OPTIMIZATION_LEVEL: "-O"
+        GCC_OPTIMIZATION_LEVEL: s
+        STRIP_INSTALLED_PRODUCT: YES
+        COPY_PHASE_STRIP: YES
+        ENABLE_NS_ASSERTIONS: NO
+        CLANG_ENABLE_MODULES: YES
+        OTHER_SWIFT_FLAGS: ["-Xfrontend", "-warn-long-expression-type-checking=200"]
+    entitlements:
+      path: MaimaiPOV/App/MaimaiPOV.entitlements

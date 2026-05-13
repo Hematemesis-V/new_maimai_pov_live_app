@@ -1,0 +1,80 @@
+name: Build iOS App
+
+on:
+  push:
+    branches: [main, master, feature/rollback-main]
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build & Archive
+    runs-on: macos-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: "16.0"
+
+      - name: Verify Core ML Model
+        run: |
+          if [ -d "MaimaiPOV/Tracking/Models/maimai_bbox_v1.mlpackage" ]; then
+            echo "Core ML model found"
+          else
+            echo "WARNING: Core ML model not found — tracking won't work until Phase 3"
+          fi
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: |
+          xcodegen generate
+          echo "=== Project generated ==="
+
+      - name: Build Archive
+        run: |
+          xcodebuild archive \
+            -project MaimaiPOV.xcodeproj \
+            -scheme MaimaiPOV \
+            -destination "generic/platform=iOS" \
+            -configuration Release \
+            -archivePath build/MaimaiPOV.xcarchive \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            2>&1
+
+      - name: Find Built App
+        id: find-app
+        run: |
+          APP_PATH=$(find build/ -name "*.app" -type d 2>/dev/null | head -1)
+          echo "Found app at: $APP_PATH"
+          echo "app_path=$APP_PATH" >> $GITHUB_OUTPUT
+
+      - name: Export IPA
+        run: |
+          mkdir -p build/ipa/Payload
+          cp -r "${{ steps.find-app.outputs.app_path }}" build/ipa/Payload/ 2>/dev/null || \
+          cp -r "build/MaimaiPOV.xcarchive/Products/Applications/MaimaiPOV.app" build/ipa/Payload/
+          cd build/ipa
+          zip -r MaimaiPOV.ipa Payload/
+          cd ../..
+          echo "=== IPA created ==="
+          ls -lh build/ipa/MaimaiPOV.ipa
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MaimaiPOV
+          path: build/ipa/MaimaiPOV.ipa
+          retention-days: 30

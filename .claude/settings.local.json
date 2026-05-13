@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(git commit *)",
+      "Bash(gh run *)",
+      "WebFetch(domain:github.com)",
+      "Bash(curl -s \"https://api.github.com/repos/Hematemesis-V/maimaiPOV_app/actions/runs?per_page=3\")",
+      "Bash(winget install *)",
+      "Bash(scoop install *)",
+      "Bash(choco install *)",
+      "Bash(gh auth *)",
+      "Read(//c/Program Files/GitHub CLI/**)",
+      "Read(//mnt/c/Program Files/**)",
+      "Read(//mnt/**)",
+      "Bash(export PATH=\"/c/Program Files/GitHub CLI:$PATH\")",
+      "Bash(curl -sI \"https://github.com/Hematemesis-V/maimaiPOV_app\")"
+    ]
+  }
+}

@@ -31,10 +31,15 @@ kernel void yoloPreprocess(
     float stab_x = (float(gid.x) - u.padLeft) / u.scale - u.padH;
     float stab_y = (float(gid.y) - u.padTop) / u.scale - u.padV;
 
+    if (stab_x < 0.0 || stab_x >= u.stabWidth || stab_y < 0.0 || stab_y >= u.stabHeight) {
+        yoloOutput.write(float4(0.0, 0.0, 0.0, 1.0), gid);
+        return;
+    }
+
     float2 uv = float2(stab_x / u.stabWidth, stab_y / u.stabHeight);
 
     constexpr sampler s(coord::normalized, address::clamp_to_edge, filter::linear);
     float4 rgba = stabOutput.sample(s, uv);
 
-    yoloOutput.write(float4(rgba.b, rgba.g, rgba.r, rgba.a), gid);
+    yoloOutput.write(float4(rgba.r, rgba.g, rgba.b, rgba.a), gid);
 }

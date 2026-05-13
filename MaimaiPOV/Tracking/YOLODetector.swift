@@ -89,8 +89,8 @@ class YOLODetector {
         let coordinates = output.coordinates
 
         let confShape = confidence.shape
-        let numBoxes = confShape.dimensions[0].intValue
-        let numClasses = confShape.dimensions[1].intValue
+        let numBoxes = confShape[0].intValue
+        let numClasses = confShape[1].intValue
 
         let innerClass = 1
         let confThresh = Config.defaultConfidenceThreshold
@@ -100,10 +100,10 @@ class YOLODetector {
         var bestIdx = -1
 
         let confPtr = UnsafeMutablePointer<Float>(OpaquePointer(confidence.dataPointer))
-        let stride = numClasses
+        let confStride = numClasses
         for i in 0..<numBoxes {
-            let idx = i * stride + innerClass
-            guard idx >= 0 && idx < confidence.count else { continue }
+            let idx = i * confStride + innerClass
+            guard idx < confidence.count.intValue else { continue }
             let c = confPtr[idx]
             if c >= confThresh && c > bestConf {
                 bestConf = c

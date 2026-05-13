@@ -88,6 +88,7 @@ struct DebugOverlayView: View {
             infoRow("Conf", String(format: "%.2f", debug.yoloConfidence))
             infoRow("BBox", debug.yoloBbox)
             infoRow("Infer", String(format: "%.1fms", debug.yoloInferenceMs))
+            infoRow("Prep", String(format: "%.1fms", debug.yoloPreprocessMs))
 
             Divider().background(Color.white.opacity(0.2)).padding(.vertical, 2)
 

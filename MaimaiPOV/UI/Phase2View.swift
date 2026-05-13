@@ -1,6 +1,7 @@
 import SwiftUI
 import simd
 import CoreMedia
+import CoreImage
 import Combine
 import AVFoundation
 import Metal
@@ -38,6 +39,10 @@ struct Phase2View: View {
 
     private let device = MTLCreateSystemDefaultDevice()!
     @State private var stabilizer: MetalStabilizer?
+    @State private var yoloPreprocessor: YOLOPreprocessor?
+    @State private var yoloPreviewImage: UIImage?
+    @State private var yoloEnabled: Bool = true
+    @State private var yoloPreviewFrameCount: Int = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -127,6 +132,21 @@ struct Phase2View: View {
             DebugOverlayView(debug: debug)
                 .padding(.leading, 4)
                 .padding(.top, 4)
+
+            if yoloEnabled, let img = yoloPreviewImage {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        Image(uiImage: img)
+                            .resizable()
+                            .aspectRatio(1.0, contentMode: .fit)
+                            .frame(width: 100, height: 100)
+                            .border(Color.cyan, width: 1)
+                            .padding(4)
+                    }
+                }
+            }
         }
     }
 
@@ -339,6 +359,12 @@ struct Phase2View: View {
         debug.lensType = selectedLens.rawValue
         debug.log("Pipeline initialized: \(selectedLens.rawValue)")
 
+        let yoloPrep = YOLOPreprocessor(device: device)
+        self.yoloPreprocessor = yoloPrep
+        if yoloPrep != nil {
+            debug.log("YOLO preprocessor initialized")
+        }
+
         camera.checkPermissionAndStart()
         camera.setFocus(Float(focusValue))
         MotionManager.shared.startUpdates()
@@ -362,6 +388,19 @@ struct Phase2View: View {
                 lagMs = elapsed * 1000.0
                 debug.stabLagMs = elapsed * 1000.0
             }
+
+            if yoloEnabled, let prep = yoloPreprocessor {
+                let yoloStart = CACurrentMediaTime()
+                let yoloBuffer = prep.process(stabOutputTexture: stab.outputTexture)
+                let yoloElapsed = CACurrentMediaTime() - yoloStart
+                yoloPreviewFrameCount += 1
+                DispatchQueue.main.async {
+                    debug.yoloPreprocessMs = yoloElapsed * 1000.0
+                    if yoloPreviewFrameCount % 10 == 0, let pb = yoloBuffer {
+                        yoloPreviewImage = imageFromCVPixelBuffer(pb)
+                    }
+                }
+            }
         }
 
         camera.onAudioSample = { _ in }
@@ -384,6 +423,13 @@ struct Phase2View: View {
         stabilizer?.loadLensConfig(cfg)
         fov = cfg.defaultFov
         stabilizer?.fov = cfg.defaultFov
+    }
+
+    private func imageFromCVPixelBuffer(_ buffer: CVPixelBuffer) -> UIImage? {
+        let ciImage = CIImage(cvPixelBuffer: buffer)
+        let context = CIContext()
+        guard let cgImage = context.createCGImage(ciImage, from: ciImage.extent) else { return nil }
+        return UIImage(cgImage: cgImage)
     }
 }
 

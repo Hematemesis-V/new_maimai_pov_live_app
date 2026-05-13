@@ -7,6 +7,7 @@ enum Config {
     static let stabWidth   = 1080
     static let stabHeight  = 1440
     static let yoloInputSize = 640
+    static let yoloPadding: Int = 40
     static let outputWidth  = 720
     static let outputHeight = 1280
 

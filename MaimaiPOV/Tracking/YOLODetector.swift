@@ -1,5 +1,6 @@
 import CoreML
 import CoreVideo
+import Metal
 import QuartzCore
 
 class YOLODetector {
@@ -16,22 +17,27 @@ class YOLODetector {
         var rawYoloW: Float
         var rawYoloH: Float
         var inferenceMs: Double
+        var preprocessMs: Double
     }
 
     private let model: best
-    private let uniforms: YOLOPreprocessUniforms
+    private var uniforms: YOLOPreprocessUniforms
     private let yoloQueue = DispatchQueue(label: "com.maimai.yolo", qos: .userInitiated)
-    private var latestBuffer: CVPixelBuffer?
-    private let bufferLock = NSLock()
+    private var latestTexture: MTLTexture?
+    private let textureLock = NSLock()
     private var running = false
     private let semaphore = DispatchSemaphore(value: 0)
+    private let preprocessor: YOLOPreprocessor
 
     var onDetection: ((DetectionResult) -> Void)?
 
-    init?() {
+    init?(device: MTLDevice) {
         guard let m = try? best(configuration: MLModelConfiguration()) else { return nil }
         self.model = m
         self.uniforms = YOLOPreprocessUniforms(padding: Config.yoloPadding)
+
+        guard let prep = YOLOPreprocessor(device: device) else { return nil }
+        self.preprocessor = prep
     }
 
     func start() {
@@ -47,34 +53,43 @@ class YOLODetector {
         semaphore.signal()
     }
 
-    func enqueue(_ pixelBuffer: CVPixelBuffer) {
-        bufferLock.lock()
-        latestBuffer = pixelBuffer
-        bufferLock.unlock()
+    func enqueue(stabTexture: MTLTexture) {
+        textureLock.lock()
+        latestTexture = stabTexture
+        textureLock.unlock()
         while semaphore.wait(timeout: .now()) == .success {}
         semaphore.signal()
+    }
+
+    func updatePadding(_ padding: Int) {
+        preprocessor.updatePadding(padding)
+        uniforms = YOLOPreprocessUniforms(padding: padding)
     }
 
     private func inferenceLoop() {
         while running {
             semaphore.wait()
 
-            bufferLock.lock()
-            guard let buffer = latestBuffer else {
-                bufferLock.unlock()
+            textureLock.lock()
+            guard let texture = latestTexture else {
+                textureLock.unlock()
                 continue
             }
-            latestBuffer = nil
-            bufferLock.unlock()
+            latestTexture = nil
+            textureLock.unlock()
 
-            let result = infer(buffer)
+            let prepStart = CACurrentMediaTime()
+            guard let pixelBuffer = preprocessor.process(stabOutputTexture: texture) else { continue }
+            let prepElapsed = CACurrentMediaTime() - prepStart
+
+            let result = infer(pixelBuffer, preprocessMs: prepElapsed * 1000.0)
             if let r = result {
                 onDetection?(r)
             }
         }
     }
 
-    private func infer(_ pixelBuffer: CVPixelBuffer) -> DetectionResult? {
+    private func infer(_ pixelBuffer: CVPixelBuffer, preprocessMs: Double) -> DetectionResult? {
         let start = CACurrentMediaTime()
 
         guard let input = try? bestInput(
@@ -117,7 +132,7 @@ class YOLODetector {
                 detected: false, confidence: 0,
                 stabCx: 0, stabCy: 0, stabW: 0, stabH: 0,
                 rawYoloCx: 0, rawYoloCy: 0, rawYoloW: 0, rawYoloH: 0,
-                inferenceMs: elapsed * 1000.0
+                inferenceMs: elapsed * 1000.0, preprocessMs: preprocessMs
             )
         }
 
@@ -132,6 +147,15 @@ class YOLODetector {
         let rawW = nw * yoloSize
         let rawH = nh * yoloSize
 
+        if rawW < 1.0 || rawH < 1.0 {
+            return DetectionResult(
+                detected: false, confidence: bestConf,
+                stabCx: 0, stabCy: 0, stabW: 0, stabH: 0,
+                rawYoloCx: rawCx, rawYoloCy: rawCy, rawYoloW: rawW, rawYoloH: rawH,
+                inferenceMs: elapsed * 1000.0, preprocessMs: preprocessMs
+            )
+        }
+
         let stabCx = (rawCx - uniforms.padLeft) / uniforms.scale - uniforms.padH
         let stabCy = (rawCy - uniforms.padTop) / uniforms.scale - uniforms.padV
         let stabW = rawW / uniforms.scale
@@ -141,7 +165,7 @@ class YOLODetector {
             detected: true, confidence: bestConf,
             stabCx: stabCx, stabCy: stabCy, stabW: stabW, stabH: stabH,
             rawYoloCx: rawCx, rawYoloCy: rawCy, rawYoloW: rawW, rawYoloH: rawH,
-            inferenceMs: elapsed * 1000.0
+            inferenceMs: elapsed * 1000.0, preprocessMs: preprocessMs
         )
     }
 }

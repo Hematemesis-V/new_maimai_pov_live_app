@@ -92,7 +92,11 @@ struct Phase2View: View {
             let pad = Int(newVal)
             Config.yoloPadding = pad
             yoloPreprocessor?.updatePadding(pad)
+            yoloDetector?.updatePadding(pad)
             debug.yoloPadding = pad
+            let u = YOLOPreprocessUniforms(padding: pad)
+            debug.yoloUniforms = String(format: "s%.3f pH%.0f pV%.0f pL%.0f pT%.0f",
+                u.scale, u.padH, u.padV, u.padLeft, u.padTop)
         }
         .onReceive(fpsTimer) { _ in
             currentFPS = Double(frameCount)
@@ -383,7 +387,7 @@ struct Phase2View: View {
             debug.log("YOLO preprocessor initialized")
         }
 
-        let detector = YOLODetector()
+        let detector = YOLODetector(device: device)
         self.yoloDetector = detector
         if detector != nil {
             detector?.onDetection = { [weak debug] result in
@@ -391,6 +395,7 @@ struct Phase2View: View {
                     debug?.yoloDetected = result.detected
                     debug?.yoloConfidence = result.confidence
                     debug?.yoloInferenceMs = result.inferenceMs
+                    debug?.yoloPreprocessMs = result.preprocessMs
                     if result.detected {
                         debug?.yoloRawCoord = String(format: "%.0f,%.0f,%.0f,%.0f",
                             result.rawYoloCx, result.rawYoloCy, result.rawYoloW, result.rawYoloH)
@@ -434,20 +439,8 @@ struct Phase2View: View {
                 debug.stabLagMs = elapsed * 1000.0
             }
 
-            if yoloEnabled, let prep = yoloPreprocessor {
-                let yoloStart = CACurrentMediaTime()
-                let yoloBuffer = prep.process(stabOutputTexture: stab.outputTexture)
-                let yoloElapsed = CACurrentMediaTime() - yoloStart
-                yoloPreviewFrameCount += 1
-                DispatchQueue.main.async {
-                    debug.yoloPreprocessMs = yoloElapsed * 1000.0
-                    if yoloPreviewFrameCount % 10 == 0, let pb = yoloBuffer {
-                        yoloPreviewImage = imageFromCVPixelBuffer(pb)
-                    }
-                }
-                if let buffer = yoloBuffer, let detector = yoloDetector {
-                    detector.enqueue(buffer)
-                }
+            if yoloEnabled, let detector = yoloDetector {
+                detector.enqueue(stabTexture: stab.outputTexture)
             }
         }
 

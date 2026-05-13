@@ -40,6 +40,7 @@ struct Phase2View: View {
     private let device = MTLCreateSystemDefaultDevice()!
     @State private var stabilizer: MetalStabilizer?
     @State private var yoloPreprocessor: YOLOPreprocessor?
+    @State private var yoloDetector: YOLODetector?
     @State private var yoloPreviewImage: UIImage?
     @State private var yoloEnabled: Bool = true
     @State private var yoloPreviewFrameCount: Int = 0
@@ -381,6 +382,29 @@ struct Phase2View: View {
             debug.log("YOLO preprocessor initialized")
         }
 
+        let detector = YOLODetector()
+        self.yoloDetector = detector
+        if detector != nil {
+            detector?.onDetection = { [weak debug] result in
+                DispatchQueue.main.async {
+                    debug?.yoloDetected = result.detected
+                    debug?.yoloConfidence = result.confidence
+                    debug?.yoloInferenceMs = result.inferenceMs
+                    if result.detected {
+                        debug?.yoloRawCoord = String(format: "%.0f,%.0f,%.0f,%.0f",
+                            result.rawYoloCx, result.rawYoloCy, result.rawYoloW, result.rawYoloH)
+                        debug?.yoloStabCoord = String(format: "%.0f,%.0f,%.0f,%.0f",
+                            result.stabCx, result.stabCy, result.stabW, result.stabH)
+                    } else {
+                        debug?.yoloRawCoord = "--"
+                        debug?.yoloStabCoord = "--"
+                    }
+                }
+            }
+            detector?.start()
+            debug.log("YOLO detector initialized and started")
+        }
+
         camera.checkPermissionAndStart()
         camera.setFocus(Float(focusValue))
         MotionManager.shared.startUpdates()
@@ -415,6 +439,9 @@ struct Phase2View: View {
                     if yoloPreviewFrameCount % 10 == 0, let pb = yoloBuffer {
                         yoloPreviewImage = imageFromCVPixelBuffer(pb)
                     }
+                }
+                if let buffer = yoloBuffer, let detector = yoloDetector {
+                    detector.enqueue(buffer)
                 }
             }
         }

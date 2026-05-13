@@ -30,13 +30,12 @@ targets:
           - "**/*.pt"
           - "**/*.zip"
           - "Tracking/Models/convert_coreml.py"
-      # Phase 3: uncomment when Core ML model is added
-      # - path: MaimaiPOV/Tracking/Models/maimai_bbox_v1.mlpackage
-      #   buildPhase: sources
-      #   type: folder
-      #   settings:
-      #     base:
-      #       CODE_GEN: class
+      - path: MaimaiPOV/Tracking/Models/best.mlpackage
+        buildPhase: sources
+        type: folder
+        settings:
+          base:
+            CODE_GEN: class
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.maimai.MaimaiPOV

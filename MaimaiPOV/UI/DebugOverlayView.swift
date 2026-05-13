@@ -86,10 +86,11 @@ struct DebugOverlayView: View {
             infoRow("Detect", debug.yoloDetected ? "YES" : "NO",
                     color: debug.yoloDetected ? .green : .red)
             infoRow("Conf", String(format: "%.2f", debug.yoloConfidence))
-            infoRow("BBox", debug.yoloBbox)
             infoRow("Infer", String(format: "%.1fms", debug.yoloInferenceMs))
             infoRow("Prep", String(format: "%.1fms", debug.yoloPreprocessMs))
             infoRow("Pad", "\(debug.yoloPadding)px")
+            infoRow("Raw", debug.yoloRawCoord)
+            infoRow("Stab", debug.yoloStabCoord)
 
             Divider().background(Color.white.opacity(0.2)).padding(.vertical, 2)
 

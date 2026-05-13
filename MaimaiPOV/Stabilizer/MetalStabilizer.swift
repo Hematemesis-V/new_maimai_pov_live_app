@@ -13,8 +13,7 @@ class MetalStabilizer {
     private var textureCache: CVMetalTextureCache
     private(set) var outputTexture: MTLTexture
 
-    private let gpuEvent: MTLSharedEvent
-    private var eventValue: UInt64 = 0
+    private var lastCommandBuffer: MTLCommandBuffer?
 
     private var readbackBuffer: MTLBuffer?
     private var readbackTexture: MTLTexture?
@@ -75,9 +74,6 @@ class MetalStabilizer {
         texDesc.storageMode = .private
         guard let outTex = device.makeTexture(descriptor: texDesc) else { return nil }
         self.outputTexture = outTex
-
-        guard let event = device.makeSharedEvent() else { return nil }
-        self.gpuEvent = event
 
         setupReadbackResources()
 
@@ -187,17 +183,12 @@ class MetalStabilizer {
         encoder.dispatchThreads(gridSize, threadsPerThreadgroup: tgSize)
         encoder.endEncoding()
 
-        eventValue &+= 1
-        cmdBuf.encodeSignalEvent(gpuEvent, value: eventValue)
         cmdBuf.commit()
+        lastCommandBuffer = cmdBuf
     }
 
     func waitForCompletion() {
-        gpuEvent.waitUntilSignaled(value: eventValue)
-    }
-
-    var lastSignaledValue: UInt64 {
-        eventValue
+        lastCommandBuffer?.waitUntilCompleted()
     }
 
     // MARK: - Texture Readback
@@ -246,10 +237,8 @@ class MetalStabilizer {
         )
         blitEncoder.endEncoding()
 
-        let signalValue = eventValue &+ 1
-        cmdBuf.encodeSignalEvent(gpuEvent, value: signalValue)
         cmdBuf.commit()
-        gpuEvent.waitUntilSignaled(value: signalValue)
+        cmdBuf.waitUntilCompleted()
 
         let w = Int(uniforms.outputWidth)
         let h = Int(uniforms.outputHeight)

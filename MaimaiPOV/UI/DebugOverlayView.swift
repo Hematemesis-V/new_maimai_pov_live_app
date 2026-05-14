@@ -111,6 +111,12 @@ struct DebugOverlayView: View {
             infoRow("MaxSpd", String(format: "%.1f", debug.trackMaxSpeed))
             infoRow("Dead", String(format: "%.1f", debug.trackDeadZone))
             infoRow("Ratio", String(format: "%.2f", debug.trackTargetRatio))
+
+            Divider().background(Color.white.opacity(0.2)).padding(.vertical, 2)
+
+            sectionHeader("STREAM")
+            infoRow("Readback", debug.streamInfo,
+                    color: debug.streamInfo != "--" ? .green : .gray)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)

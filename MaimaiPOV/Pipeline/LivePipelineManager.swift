@@ -65,6 +65,7 @@ class LivePipelineManager: ObservableObject {
 
     private var textureReadback: TextureReadback?
     private var frameCount: Int = 0
+    private var streamFrameCount: Int = 0
     private var fpsTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
 
@@ -206,6 +207,7 @@ class LivePipelineManager: ObservableObject {
                    let cr = self.cropRenderer,
                    let pixelBuffer = readback.read(from: cr.outputTexture) {
                     let timestamp = CMTime(seconds: alignedTime, preferredTimescale: 1000000000)
+                    self.streamFrameCount += 1
                     self.onStreamBufferAvailable?(pixelBuffer, timestamp)
                 }
 
@@ -237,11 +239,14 @@ class LivePipelineManager: ObservableObject {
             self?.pipelineQueue.async {
                 guard let self = self else { return }
                 let count = self.frameCount
+                let streamCount = self.streamFrameCount
                 self.frameCount = 0
+                self.streamFrameCount = 0
                 DispatchQueue.main.async {
                     self.currentFPS = Double(count)
                     self.debug.fps = Double(count)
                     self.debug.frameCount = count
+                    self.debug.streamInfo = "\(streamCount) bufs/s 720x1280"
                 }
             }
         }

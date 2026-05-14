@@ -43,6 +43,7 @@ class DebugInfoManager: ObservableObject {
     @Published var trackTargetRatio: Float = Float(Config.defaultTargetRatio)
 
     @Published var logMessages: [String] = []
+    @Published var streamInfo: String = "--"
     private let maxLogMessages = 30
 
     private let timeFormatter: DateFormatter = {

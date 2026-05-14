@@ -19,9 +19,6 @@ struct Phase2View: View {
         .onAppear {
             UIApplication.shared.isIdleTimerDisabled = true
             pipeline.start()
-            pipeline.onStreamBufferAvailable = { buffer, time in
-                print("🎯 成功捕获推流用 Buffer，尺寸: \(CVPixelBufferGetWidth(buffer))x\(CVPixelBufferGetHeight(buffer))")
-            }
         }
         .onChange(of: pipeline.selectedLens) { pipeline.handleLensChange($0) }
         .onChange(of: pipeline.focusValue) { pipeline.camera.setFocus(Float($0)) }

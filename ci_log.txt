@@ -1,0 +1,8 @@
+﻿gh : failed to get run log: creating cache entry: open C:\Users\Lin_g\AppData\Local\GitHub CLI\run-log-25872382047-1778776650.zip: The system cannot find the file sp
+ecified.
+所在位置 行:1 字符: 35
++ ... "d:\maimai\maimaiPOV_app"; gh run view 25872382047 --log 2>&1 | Out-F ...
++                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (failed to get r...file specified.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 

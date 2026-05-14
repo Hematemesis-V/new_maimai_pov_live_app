@@ -225,11 +225,11 @@ class RTMPStreamManager: ObservableObject {
     func appendAudio(sampleBuffer: CMSampleBuffer) {
         guard isStreaming else { return }
 
-        guard let formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer),
-              let audioFormat = AVAudioFormat(cmAudioFormatDescription: formatDescription) else { return }
+        guard let formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer) else { return }
+        let audioFormat = AVAudioFormat(cmAudioFormatDescription: formatDescription)
 
         let frameCount = AVAudioFrameCount(sampleBuffer.numSamples)
-        guard let pcmBuffer = AVAudioPCMBuffer(pcmFormat: audioFormat, frameCount: frameCount) else { return }
+        guard let pcmBuffer = AVAudioPCMBuffer(pcmFormat: audioFormat, frameCapacity: frameCount) else { return }
 
         var audioBufferList = AudioBufferList()
         var blockBuffer: CMBlockBuffer?
@@ -258,14 +258,18 @@ class RTMPStreamManager: ObservableObject {
         }
         pcmBuffer.frameLength = frameCount
 
-        var audioTime = AVAudioTime(sampleBuffer: sampleBuffer)
+        let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+        let sampleTime = AVAudioFramePosition(CMTimeGetSeconds(pts) * audioFormat.sampleRate)
+        var audioTime = AVAudioTime(sampleTime: sampleTime, atRate: audioFormat.sampleRate)
 
         let delayMs = audioDelayMs
         if delayMs != 0 {
-            let delayNanos = UInt64(delayMs * 1_000_000)
-            if let hostTime = audioTime.hostTime {
-                let adjustedHostTime = hostTime + delayNanos
-                audioTime = AVAudioTime(hostTime: adjustedHostTime, sampleRate: audioTime.sampleRate)
+            let delaySeconds = delayMs / 1000.0
+            let hostTime = AVAudioTime.hostTime(forSeconds: delaySeconds)
+            if let currentHostTime = audioTime.hostTime {
+                let adjustedHostTime = currentHostTime + hostTime
+                let adjustedSampleTime = sampleTime + AVAudioFramePosition(delaySeconds * audioFormat.sampleRate)
+                audioTime = AVAudioTime(hostTime: adjustedHostTime, sampleTime: adjustedSampleTime, atRate: audioFormat.sampleRate)
             }
         }
 

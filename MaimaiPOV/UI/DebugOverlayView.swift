@@ -117,6 +117,14 @@ struct DebugOverlayView: View {
             sectionHeader("STREAM")
             infoRow("Readback", debug.streamInfo,
                     color: debug.streamInfo != "--" ? .green : .gray)
+
+            Divider().background(Color.white.opacity(0.2)).padding(.vertical, 2)
+
+            sectionHeader("RTMP")
+            infoRow("Status", debug.rtmpStatus,
+                    color: rtmpStatusColor(debug.rtmpStatus))
+            infoRow("Bitrate", "\(debug.rtmpBitrate)kbps")
+            infoRow("Dropped", "\(debug.rtmpDroppedFrames)frames")
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
@@ -163,6 +171,15 @@ struct DebugOverlayView: View {
             Text(value)
                 .foregroundColor(color)
             Spacer()
+        }
+    }
+
+    private func rtmpStatusColor(_ status: String) -> Color {
+        switch status {
+        case "Publishing": return .green
+        case "Connecting", "Connected": return .yellow
+        case "Idle": return .gray
+        default: return .red
         }
     }
 

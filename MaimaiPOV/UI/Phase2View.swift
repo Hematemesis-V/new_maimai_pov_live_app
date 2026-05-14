@@ -6,6 +6,8 @@ import UIKit
 struct Phase2View: View {
     @StateObject private var pipeline = LivePipelineManager()
     @State private var controlsExpanded: Bool = true
+    @AppStorage("rtmpUrl") private var rtmpUrl: String = ""
+    @AppStorage("streamKey") private var streamKey: String = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -140,6 +142,12 @@ struct Phase2View: View {
                         trackMaxSpeedRow
                         trackDeadZoneRow
                         trackTargetRatioRow
+                        liveStreamSectionHeader
+                        rtmpUrlRow
+                        streamKeyRow
+                        resolutionRow
+                        bitrateRow
+                        streamButtonRow
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
@@ -343,6 +351,129 @@ struct Phase2View: View {
             Spacer()
         }
         .padding(.top, 8)
+    }
+
+    private var liveStreamSectionHeader: some View {
+        HStack {
+            Text("Live Stream")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.white)
+            Spacer()
+            if pipeline.streamManager.isStreaming {
+                Circle()
+                    .fill(Color.red)
+                    .frame(width: 8, height: 8)
+            }
+        }
+        .padding(.top, 8)
+    }
+
+    private var rtmpUrlRow: some View {
+        HStack {
+            Text("URL").font(.caption).frame(width: 55, alignment: .leading)
+            TextField("rtmp://...", text: $rtmpUrl)
+                .font(.system(size: 11, design: .monospaced))
+                .textFieldStyle(.roundedBorder)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .disabled(pipeline.streamManager.isStreaming)
+        }
+    }
+
+    private var streamKeyRow: some View {
+        HStack {
+            Text("Key").font(.caption).frame(width: 55, alignment: .leading)
+            SecureField("stream-key", text: $streamKey)
+                .font(.system(size: 11, design: .monospaced))
+                .textFieldStyle(.roundedBorder)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .disabled(pipeline.streamManager.isStreaming)
+        }
+    }
+
+    private var resolutionRow: some View {
+        HStack {
+            Text("Res").font(.caption).frame(width: 55, alignment: .leading)
+            Picker("", selection: $pipeline.streamManager.streamResolution) {
+                ForEach(StreamResolution.allCases, id: \.self) { res in
+                    Text(res.rawValue).tag(res)
+                }
+            }
+            .pickerStyle(.segmented)
+            .disabled(pipeline.streamManager.isStreaming)
+            Spacer()
+            if pipeline.streamManager.isStreaming {
+                Text("断开后可切换")
+                    .font(.system(size: 9))
+                    .foregroundColor(.gray)
+            }
+        }
+    }
+
+    private var bitrateRow: some View {
+        labeledRow("Bitrate") {
+            Slider(value: $pipeline.streamManager.videoBitrate, in: 1000...10000, step: 500)
+        } valueLabel: {
+            Text("\(pipeline.streamManager.videoBitrate)kbps")
+                .font(.caption)
+                .foregroundColor(.gray)
+                .frame(width: 60, alignment: .trailing)
+        }
+    }
+
+    private var streamButtonRow: some View {
+        HStack {
+            if pipeline.streamManager.isStreaming {
+                Button {
+                    pipeline.streamManager.stopPublish()
+                } label: {
+                    HStack {
+                        Circle()
+                            .fill(Color.red)
+                            .frame(width: 8, height: 8)
+                        Text("停止推流")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
+                .controlSize(.small)
+            } else {
+                Button {
+                    pipeline.streamManager.startPublish(url: rtmpUrl, streamKey: streamKey)
+                } label: {
+                    HStack {
+                        Image(systemName: "arrow.up.circle")
+                            .font(.caption)
+                        Text("开始推流")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.green)
+                .controlSize(.small)
+                .disabled(rtmpUrl.isEmpty || streamKey.isEmpty)
+            }
+
+            Text(pipeline.streamManager.streamStatus)
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundColor(statusColor(pipeline.streamManager.streamStatus))
+                .lineLimit(1)
+        }
+    }
+
+    private func statusColor(_ status: String) -> Color {
+        switch status {
+        case "Publishing": return .green
+        case "Connecting", "Connected": return .yellow
+        case "Idle": return .gray
+        default: return .red
+        }
     }
 
     // MARK: - Helpers

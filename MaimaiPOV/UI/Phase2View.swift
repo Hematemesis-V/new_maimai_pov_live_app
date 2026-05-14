@@ -46,6 +46,14 @@ struct Phase2View: View {
     @State private var yoloEnabled: Bool = true
     @State private var yoloPadding: Double = Double(Config.yoloPadding)
 
+    @State private var cropRenderer: CropRenderer?
+    @State private var latestTrackOutput: SmoothTracker.TrackOutput?
+
+    @State private var trackAlpha: Double = Double(Config.defaultAlpha)
+    @State private var trackMaxSpeed: Double = Double(Config.defaultMaxSpeed)
+    @State private var trackDeadZone: Double = Double(Config.defaultDeadZone)
+    @State private var trackTargetRatio: Double = Double(Config.defaultTargetRatio)
+
     var body: some View {
         VStack(spacing: 0) {
             // Preview
@@ -97,6 +105,22 @@ struct Phase2View: View {
             debug.yoloUniforms = String(format: "s%.3f pH%.0f pV%.0f pL%.0f pT%.0f",
                 u.scale, u.padH, u.padV, u.padLeft, u.padTop)
         }
+        .onChange(of: trackAlpha) { newVal in
+            smoothTracker.alpha = Float(newVal)
+            debug.trackAlpha = Float(newVal)
+        }
+        .onChange(of: trackMaxSpeed) { newVal in
+            smoothTracker.maxSpeed = Float(newVal)
+            debug.trackMaxSpeed = Float(newVal)
+        }
+        .onChange(of: trackDeadZone) { newVal in
+            smoothTracker.deadZone = Float(newVal)
+            debug.trackDeadZone = Float(newVal)
+        }
+        .onChange(of: trackTargetRatio) { newVal in
+            smoothTracker.targetRatio = Float(newVal)
+            debug.trackTargetRatio = Float(newVal)
+        }
         .onReceive(fpsTimer) { _ in
             currentFPS = Double(frameCount)
             debug.fps = Double(frameCount)
@@ -115,9 +139,14 @@ struct Phase2View: View {
 
     private var previewSection: some View {
         ZStack(alignment: .topTrailing) {
-            if let stab = stabilizer, camera.cameraAuthorized {
-                MetalView(device: device, texture: stab.outputTexture)
-                    .aspectRatio(3.0 / 4.0, contentMode: .fit)
+            if let stab = stabilizer, stab.stabilizerEnabled, camera.cameraAuthorized {
+                if let cr = cropRenderer {
+                    MetalView(device: device, texture: cr.outputTexture)
+                        .aspectRatio(9.0 / 16.0, contentMode: .fit)
+                } else {
+                    MetalView(device: device, texture: stab.outputTexture)
+                        .aspectRatio(3.0 / 4.0, contentMode: .fit)
+                }
             } else if camera.cameraAuthorized {
                 CameraPreviewView(session: camera.session)
                     .aspectRatio(3.0 / 4.0, contentMode: .fit)
@@ -202,6 +231,11 @@ struct Phase2View: View {
                         audioDelayRow
                         yoloToggleRow
                         yoloPaddingRow
+                        trackingSectionHeader
+                        trackAlphaRow
+                        trackMaxSpeedRow
+                        trackDeadZoneRow
+                        trackTargetRatioRow
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
@@ -365,6 +399,48 @@ struct Phase2View: View {
         }
     }
 
+    private var trackAlphaRow: some View {
+        labeledRow("Alpha") {
+            Slider(value: $trackAlpha, in: 0.01...1.0, step: 0.01)
+        } valueLabel: {
+            Text(String(format: "%.2f", trackAlpha)).font(.caption).foregroundColor(.gray).frame(width: 40, alignment: .trailing)
+        }
+    }
+
+    private var trackMaxSpeedRow: some View {
+        labeledRow("MaxSpeed") {
+            Slider(value: $trackMaxSpeed, in: 1...30, step: 1)
+        } valueLabel: {
+            Text("\(Int(trackMaxSpeed))").font(.caption).foregroundColor(.gray).frame(width: 40, alignment: .trailing)
+        }
+    }
+
+    private var trackDeadZoneRow: some View {
+        labeledRow("DeadZone") {
+            Slider(value: $trackDeadZone, in: 0...50, step: 1)
+        } valueLabel: {
+            Text("\(Int(trackDeadZone))").font(.caption).foregroundColor(.gray).frame(width: 40, alignment: .trailing)
+        }
+    }
+
+    private var trackTargetRatioRow: some View {
+        labeledRow("TargetRatio") {
+            Slider(value: $trackTargetRatio, in: 0.1...1.0, step: 0.05)
+        } valueLabel: {
+            Text(String(format: "%.2f", trackTargetRatio)).font(.caption).foregroundColor(.gray).frame(width: 40, alignment: .trailing)
+        }
+    }
+
+    private var trackingSectionHeader: some View {
+        HStack {
+            Text("Tracking")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.white)
+            Spacer()
+        }
+        .padding(.top, 8)
+    }
+
     // MARK: - Helpers
 
     private func labeledRow<C: View, V: View>(
@@ -398,6 +474,14 @@ struct Phase2View: View {
             debug.log("YOLO preprocessor initialized")
         }
 
+        let cropR = CropRenderer(device: device)
+        self.cropRenderer = cropR
+
+        self.trackAlpha = Double(smoothTracker.alpha)
+        self.trackMaxSpeed = Double(smoothTracker.maxSpeed)
+        self.trackDeadZone = Double(smoothTracker.deadZone)
+        self.trackTargetRatio = Double(smoothTracker.targetRatio)
+
         let detector = YOLODetector(device: device)
         self.yoloDetector = detector
         let tracker = smoothTracker
@@ -429,6 +513,7 @@ struct Phase2View: View {
                             stabW: result.stabW,
                             stabH: result.stabH
                         )
+                        self?.latestTrackOutput = track
                         debug?.trackCx = track.cx
                         debug?.trackCy = track.cy
                         debug?.trackCropW = track.cropW
@@ -485,6 +570,19 @@ struct Phase2View: View {
 
             if yoloEnabled, let detector = yoloDetector {
                 detector.enqueue(stabTexture: stab.outputTexture)
+            }
+
+            if let cr = cropRenderer {
+                if let track = latestTrackOutput {
+                    cr.process(stabTexture: stab.outputTexture,
+                               cx: track.cx, cy: track.cy,
+                               cropW: track.cropW, cropH: track.cropH)
+                } else {
+                    let fb = cr.makeFallbackTrack()
+                    cr.process(stabTexture: stab.outputTexture,
+                               cx: fb.cx, cy: fb.cy,
+                               cropW: fb.cropW, cropH: fb.cropH)
+                }
             }
         }
 

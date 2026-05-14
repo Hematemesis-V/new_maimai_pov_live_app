@@ -37,6 +37,10 @@ class DebugInfoManager: ObservableObject {
     @Published var trackSmoothW: Float = 0
     @Published var trackSmoothH: Float = 0
     @Published var trackState: String = "idle"
+    @Published var trackAlpha: Float = Float(Config.defaultAlpha)
+    @Published var trackMaxSpeed: Float = Float(Config.defaultMaxSpeed)
+    @Published var trackDeadZone: Float = Float(Config.defaultDeadZone)
+    @Published var trackTargetRatio: Float = Float(Config.defaultTargetRatio)
 
     @Published var logMessages: [String] = []
     private let maxLogMessages = 30

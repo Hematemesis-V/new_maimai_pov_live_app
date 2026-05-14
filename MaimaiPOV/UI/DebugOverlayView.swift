@@ -107,6 +107,10 @@ struct DebugOverlayView: View {
             infoRow("Crop", String(format: "%.0f×%.0f @%.0f,%.0f",
                 debug.trackCropW, debug.trackCropH,
                 debug.trackCx, debug.trackCy))
+            infoRow("Alpha", String(format: "%.2f", debug.trackAlpha))
+            infoRow("MaxSpd", String(format: "%.1f", debug.trackMaxSpeed))
+            infoRow("Dead", String(format: "%.1f", debug.trackDeadZone))
+            infoRow("Ratio", String(format: "%.2f", debug.trackTargetRatio))
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)

@@ -61,6 +61,8 @@ class LivePipelineManager: ObservableObject {
 
     var isCropActive: Bool { cropRenderer != nil }
 
+    let pipelineQueue = DispatchQueue(label: "com.maimai.pipeline", qos: .userInteractive)
+
     private var frameCount: Int = 0
     private var fpsTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
@@ -161,40 +163,44 @@ class LivePipelineManager: ObservableObject {
         MotionManager.shared.startUpdates()
 
         camera.onVideoFrame = { [weak self] pixelBuffer, alignedTime in
-            guard let self = self else { return }
-            self.frameCount += 1
-            guard let stab = self.stabilizer, stab.stabilizerEnabled else { return }
+            self?.pipelineQueue.async {
+                guard let self = self else { return }
+                self.frameCount += 1
+                guard let stab = self.stabilizer, stab.stabilizerEnabled else { return }
 
-            let centerTime = alignedTime + (Config.syncOffsetMs / 1000.0)
-            let topTime    = centerTime - (Config.readoutTimeMs / 2000.0)
-            let bottomTime = centerTime + (Config.readoutTimeMs / 2000.0)
+                let centerTime = alignedTime + (Config.syncOffsetMs / 1000.0)
+                let topTime    = centerTime - (Config.readoutTimeMs / 2000.0)
+                let bottomTime = centerTime + (Config.readoutTimeMs / 2000.0)
 
-            guard let qCenter = MotionManager.shared.getQuaternion(at: centerTime),
-                  let qTop    = MotionManager.shared.getQuaternion(at: topTime),
-                  let qBottom = MotionManager.shared.getQuaternion(at: bottomTime) else { return }
+                guard let qCenter = MotionManager.shared.getQuaternion(at: centerTime),
+                      let qTop    = MotionManager.shared.getQuaternion(at: topTime),
+                      let qBottom = MotionManager.shared.getQuaternion(at: bottomTime) else { return }
 
-            let start = CACurrentMediaTime()
-            stab.process(pixelBuffer: pixelBuffer, qCenter: qCenter, qTop: qTop, qBottom: qBottom)
-            let elapsed = CACurrentMediaTime() - start
-            DispatchQueue.main.async {
-                self.lagMs = elapsed * 1000.0
-                self.debug.stabLagMs = elapsed * 1000.0
-            }
+                let start = CACurrentMediaTime()
+                stab.process(pixelBuffer: pixelBuffer, qCenter: qCenter, qTop: qTop, qBottom: qBottom)
+                let elapsed = CACurrentMediaTime() - start
 
-            if self.yoloEnabled, let detector = self.yoloDetector {
-                detector.enqueue(stabTexture: stab.outputTexture)
-            }
+                if self.yoloEnabled, let detector = self.yoloDetector {
+                    detector.enqueue(stabTexture: stab.outputTexture)
+                }
 
-            if let cr = self.cropRenderer {
-                if let track = self.latestTrackOutput {
-                    cr.process(stabTexture: stab.outputTexture,
-                               cx: track.cx, cy: track.cy,
-                               cropW: track.cropW, cropH: track.cropH)
-                } else {
-                    let fb = cr.makeFallbackTrack()
-                    cr.process(stabTexture: stab.outputTexture,
-                               cx: fb.cx, cy: fb.cy,
-                               cropW: fb.cropW, cropH: fb.cropH)
+                if let cr = self.cropRenderer {
+                    if let track = self.latestTrackOutput {
+                        cr.process(stabTexture: stab.outputTexture,
+                                   cx: track.cx, cy: track.cy,
+                                   cropW: track.cropW, cropH: track.cropH)
+                    } else {
+                        let fb = cr.makeFallbackTrack()
+                        cr.process(stabTexture: stab.outputTexture,
+                                   cx: fb.cx, cy: fb.cy,
+                                   cropW: fb.cropW, cropH: fb.cropH)
+                    }
+                }
+
+                DispatchQueue.main.async {
+                    self.lagMs = elapsed * 1000.0
+                    self.debug.stabLagMs = elapsed * 1000.0
+                    self.objectWillChange.send()
                 }
             }
         }
@@ -216,12 +222,15 @@ class LivePipelineManager: ObservableObject {
 
     private func startFPSTimer() {
         fpsTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            guard let self = self else { return }
-            DispatchQueue.main.async {
-                self.currentFPS = Double(self.frameCount)
-                self.debug.fps = Double(self.frameCount)
-                self.debug.frameCount = self.frameCount
+            self?.pipelineQueue.async {
+                guard let self = self else { return }
+                let count = self.frameCount
                 self.frameCount = 0
+                DispatchQueue.main.async {
+                    self.currentFPS = Double(count)
+                    self.debug.fps = Double(count)
+                    self.debug.frameCount = count
+                }
             }
         }
     }

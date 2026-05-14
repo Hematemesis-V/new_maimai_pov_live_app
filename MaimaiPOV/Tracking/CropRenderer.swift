@@ -47,10 +47,10 @@ class CropRenderer {
         let halfW = cropW / 2.0
         let halfH = cropH / 2.0
 
-        let cropX1 = max(0, cx - halfW)
-        let cropY1 = max(0, cy - halfH)
-        let cropX2 = min(stabWidth, cx + halfW)
-        let cropY2 = min(stabHeight, cy + halfH)
+        let cropX1 = cx - halfW
+        let cropY1 = cy - halfH
+        let cropX2 = cx + halfW
+        let cropY2 = cy + halfH
 
         let actualCropW = max(cropX2 - cropX1, 1)
         let actualCropH = max(cropY2 - cropY1, 1)

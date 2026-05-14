@@ -18,8 +18,8 @@ class SmoothTracker {
 
     private var smoothCx: Float = Float(Config.stabWidth) / 2.0
     private var smoothCy: Float = Float(Config.stabHeight) / 2.0
-    private var smoothW: Float = 0
-    private var smoothH: Float = 0
+    private var smoothW: Float = Float(Config.stabHeight) * (9.0 / 16.0)
+    private var smoothH: Float = Float(Config.stabHeight)
     private var initialized = false
 
     private var lastDetectTime: TimeInterval = 0
@@ -84,7 +84,7 @@ class SmoothTracker {
         }
 
         let baseH = max(smoothH, smoothW / outputRatio)
-        let cropH = baseH / targetRatio
+        let cropH = baseH * (1.0 + targetRatio)
         let cropW = cropH * outputRatio
 
         let state: String
@@ -114,8 +114,8 @@ class SmoothTracker {
     func reset() {
         smoothCx = Float(Config.stabWidth) / 2.0
         smoothCy = Float(Config.stabHeight) / 2.0
-        smoothW = 0
-        smoothH = 0
+        smoothW = Float(Config.stabHeight) * (9.0 / 16.0)
+        smoothH = Float(Config.stabHeight)
         initialized = false
         wasDetected = false
         lastDetectTime = 0

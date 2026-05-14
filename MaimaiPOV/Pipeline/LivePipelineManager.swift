@@ -52,7 +52,7 @@ class LivePipelineManager: ObservableObject {
     var latestTrackOutput: SmoothTracker.TrackOutput?
 
     var onStreamBufferAvailable: ((CVPixelBuffer, CMTime) -> Void)?
-    var onAudioSampleAvailable: ((CMSampleBuffer) -> Void)?
+    var onAudioSampleAvailable: ((CMSampleBuffer, Double) -> Void)?
 
     var previewTexture: MTLTexture? {
         if let cr = cropRenderer {
@@ -232,9 +232,9 @@ class LivePipelineManager: ObservableObject {
             }
         }
 
-        camera.onAudioSample = { [weak self] sample in
-            self?.onAudioSampleAvailable?(sample)
-            self?.streamManager.appendAudio(sampleBuffer: sample)
+        camera.onAudioSample = { [weak self] sample, alignedTime in
+            self?.onAudioSampleAvailable?(sample, alignedTime)
+            self?.streamManager.appendAudio(sampleBuffer: sample, alignedTime: alignedTime)
         }
 
         startFPSTimer()

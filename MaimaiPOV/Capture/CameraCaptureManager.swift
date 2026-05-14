@@ -20,7 +20,7 @@ class CameraCaptureManager: NSObject, ObservableObject {
     private var currentISO: Float = 0.0
 
     var onVideoFrame: ((CVPixelBuffer, Double) -> Void)?
-    var onAudioSample: ((CMSampleBuffer) -> Void)?
+    var onAudioSample: ((CMSampleBuffer, Double) -> Void)?
 
     // Clock alignment: both camera and audio PTS use hostTime, but may drift.
     // We track individual offsets so audio delay can be adjusted independently.
@@ -356,6 +356,7 @@ extension CameraCaptureManager: AVCaptureVideoDataOutputSampleBufferDelegate,
             audioClockOffset = audioClockOffset! * 0.99 + (systemTime - audioTime) * 0.01
         }
 
-        onAudioSample?(sampleBuffer)
+        let alignedTime = audioTime + audioClockOffset!
+        onAudioSample?(sampleBuffer, alignedTime)
     }
 }

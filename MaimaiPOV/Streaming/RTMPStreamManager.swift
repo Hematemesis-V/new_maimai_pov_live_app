@@ -22,7 +22,7 @@ class RTMPStreamManager: ObservableObject {
     @Published var streamResolution: StreamResolution = .r720p
     @Published var videoBitrate: Int = Config.videoBitrate / 1000
     private let audioDelayLock = NSLock()
-    private var _audioDelayMs: Double = 0.0
+    private var _audioDelayMs: Double = Config.audioDelayMs
     var audioDelayMs: Double {
         get {
             audioDelayLock.lock()
@@ -284,7 +284,7 @@ class RTMPStreamManager: ObservableObject {
         videoContinuation?.yield(finalSampleBuffer)
     }
 
-    func appendAudio(sampleBuffer: CMSampleBuffer) {
+    func appendAudio(sampleBuffer: CMSampleBuffer, alignedTime: Double) {
         guard isStreaming else { return }
 
         guard let formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer) else { return }
@@ -302,8 +302,7 @@ class RTMPStreamManager: ObservableObject {
         )
         guard copyStatus == noErr else { return }
 
-        let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-        let sampleTime = AVAudioFramePosition(CMTimeGetSeconds(pts) * audioFormat.sampleRate)
+        let sampleTime = AVAudioFramePosition(alignedTime * audioFormat.sampleRate)
         var audioTime = AVAudioTime(sampleTime: sampleTime, atRate: audioFormat.sampleRate)
 
         let delayMs: Double = {

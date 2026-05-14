@@ -208,7 +208,7 @@ struct Phase1View: View {
             // The alignedTime is available for IMU sync in later phases.
         }
 
-        camera.onAudioSample = { sampleBuffer in
+        camera.onAudioSample = { sampleBuffer, alignedTime in
             // Audio is captured but not processed until Phase 4 (RTMP).
         }
     }

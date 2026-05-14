@@ -11,12 +11,12 @@ class TextureReadback {
     private var readbackTexture: MTLTexture?
     private var pixelBufferPool: CVPixelBufferPool?
 
-    init(device: MTLDevice, width: Int, height: Int, sourceFormat: MTLPixelFormat = .bgra8Unorm) {
+    init?(device: MTLDevice, width: Int, height: Int, sourceFormat: MTLPixelFormat = .bgra8Unorm) {
         self.device = device
         self.width = width
         self.height = height
         self.sourceFormat = sourceFormat
-        guard let queue = device.makeCommandQueue() else { return }
+        guard let queue = device.makeCommandQueue() else { return nil }
         self.commandQueue = queue
         setupReadbackResources()
         setupPixelBufferPool()

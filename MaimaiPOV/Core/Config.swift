@@ -36,11 +36,21 @@ enum Config {
 
     // IMU sync (runtime-adjustable, persisted)
     static var syncOffsetMs: Double {
-        get { UserDefaults.standard.double(forKey: syncOffsetKey) }
+        get {
+            guard UserDefaults.standard.object(forKey: syncOffsetKey) != nil else {
+                return defaultSyncOffsetMs
+            }
+            return UserDefaults.standard.double(forKey: syncOffsetKey)
+        }
         set { UserDefaults.standard.set(newValue, forKey: syncOffsetKey) }
     }
     static var readoutTimeMs: Double {
-        get { UserDefaults.standard.double(forKey: readoutTimeKey) }
+        get {
+            guard UserDefaults.standard.object(forKey: readoutTimeKey) != nil else {
+                return defaultReadoutTimeMs
+            }
+            return UserDefaults.standard.double(forKey: readoutTimeKey)
+        }
         set { UserDefaults.standard.set(newValue, forKey: readoutTimeKey) }
     }
     static let defaultSyncOffsetMs: Double = -25.0

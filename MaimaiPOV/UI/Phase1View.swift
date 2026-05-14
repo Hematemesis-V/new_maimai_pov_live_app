@@ -12,8 +12,8 @@ struct Phase1View: View {
     @State private var minISO: Double = 50.0
     @State private var maxISO: Double = 3200.0
     @State private var selectedLens: LensType = .main
-    @State private var syncOffsetMs: Double = Config.defaultSyncOffsetMs
-    @State private var readoutTimeMs: Double = Config.defaultReadoutTimeMs
+    @State private var syncOffsetMs: Double = Config.syncOffsetMs
+    @State private var readoutTimeMs: Double = Config.readoutTimeMs
     @State private var audioDelayMs: Double = 0.0
 
     @State private var frameCount: Int = 0

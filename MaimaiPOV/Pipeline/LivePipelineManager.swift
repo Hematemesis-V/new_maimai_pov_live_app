@@ -16,8 +16,8 @@ class LivePipelineManager: ObservableObject {
     @Published var maxISO: Double = 3200.0
     @Published var selectedLens: LensType = .main
 
-    @Published var syncOffsetMs: Double = Config.defaultSyncOffsetMs
-    @Published var readoutTimeMs: Double = Config.defaultReadoutTimeMs
+    @Published var syncOffsetMs: Double = Config.syncOffsetMs
+    @Published var readoutTimeMs: Double = Config.readoutTimeMs
     @Published var audioDelayMs: Double = 0.0
 
     @Published var fov: Float = 100.0

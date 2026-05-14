@@ -230,45 +230,25 @@ class RTMPStreamManager: ObservableObject {
 
         let frameCount = AVAudioFrameCount(sampleBuffer.numSamples)
         guard let pcmBuffer = AVAudioPCMBuffer(pcmFormat: audioFormat, frameCapacity: frameCount) else { return }
-
-        var audioBufferList = AudioBufferList()
-        var blockBuffer: CMBlockBuffer?
-        let status = CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(
-            sampleBuffer,
-            bufferListSizeNeededOut: nil,
-            bufferListOut: &audioBufferList,
-            bufferListSize: MemoryLayout<AudioBufferList>.size,
-            blockBufferAllocator: nil,
-            blockBufferMemoryAllocator: nil,
-            flags: kCMSampleBufferFlag_AudioBufferList_Assure16ByteAlignment,
-            blockBufferOut: &blockBuffer
-        )
-        guard status == noErr else { return }
-
-        let numChannels = Int(audioFormat.channelCount)
-        let srcBuffer = audioBufferList.mBuffers
-        guard let srcData = srcBuffer.mData else { return }
-
-        for ch in 0..<numChannels {
-            guard let dst = pcmBuffer.floatChannelData?[ch] else { continue }
-            let src = srcData.assumingMemoryBound(to: Float.self).advanced(by: ch)
-            for i in 0..<Int(frameCount) {
-                dst[i] = src.advanced(by: numChannels * i).pointee
-            }
-        }
         pcmBuffer.frameLength = frameCount
+
+        let copyStatus = CMSampleBufferCopyPCMDataIntoAudioBufferList(
+            sampleBuffer,
+            at: 0,
+            frameCount: Int32(frameCount),
+            into: pcmBuffer.mutableAudioBufferList
+        )
+        guard copyStatus == noErr else { return }
 
         let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
         let sampleTime = AVAudioFramePosition(CMTimeGetSeconds(pts) * audioFormat.sampleRate)
         var audioTime = AVAudioTime(sampleTime: sampleTime, atRate: audioFormat.sampleRate)
 
         let delayMs = audioDelayMs
-        if delayMs != 0 && audioTime.isHostTimeValid {
+        if delayMs != 0 {
             let delaySeconds = delayMs / 1000.0
-            let hostTimeOffset = AVAudioTime.hostTime(forSeconds: delaySeconds)
-            let adjustedHostTime = audioTime.hostTime + hostTimeOffset
             let adjustedSampleTime = sampleTime + AVAudioFramePosition(delaySeconds * audioFormat.sampleRate)
-            audioTime = AVAudioTime(hostTime: adjustedHostTime, sampleTime: adjustedSampleTime, atRate: audioFormat.sampleRate)
+            audioTime = AVAudioTime(sampleTime: adjustedSampleTime, atRate: audioFormat.sampleRate)
         }
 
         audioContinuation?.yield((pcmBuffer, audioTime))

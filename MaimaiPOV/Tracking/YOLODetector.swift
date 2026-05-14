@@ -154,9 +154,10 @@ class YOLODetector {
 
         let elapsed = CACurrentMediaTime() - start
 
-        let featureProvider = output as? MLFeatureProvider
-        guard let feature = featureProvider?.features.first,
-              let multiArray = feature.multiArrayValue else { return nil }
+        let featureProvider = output as MLFeatureProvider
+        guard let featureName = featureProvider.featureNames.first,
+              let featureValue = featureProvider.featureValue(for: featureName),
+              let multiArray = featureValue.multiArrayValue else { return nil }
 
         let shape = multiArray.shape
         guard shape.count == 3 else { return nil }
@@ -166,7 +167,7 @@ class YOLODetector {
         let strides = multiArray.strides.map { $0.intValue }
         let dataPointer = multiArray.dataPointer
 
-        let isFloat16 = multiArray.dataType == .float16
+        let isFloat16 = multiArray.dataType == MLMultiArrayDataType.float16
 
         let innerClassIdx = 5
         let confThresh = Config.defaultConfidenceThreshold
@@ -183,7 +184,7 @@ class YOLODetector {
 
             for a in 0..<numAnchors {
                 let confRaw = ptr[innerClassIdx * featStride + a * anchorStride]
-                let conf = Float(_Float16(bitPattern: confRaw))
+                let conf = Float(Float16(bitPattern: confRaw))
                 if conf >= confThresh {
                     aboveThreshCount += 1
                     if conf > bestConf {
@@ -228,10 +229,10 @@ class YOLODetector {
             let ptr = dataPointer.assumingMemoryBound(to: UInt16.self)
             let featStride = strides[1]
             let anchorStride = strides[2]
-            nx = Float(_Float16(bitPattern: ptr[0 * featStride + bestAnchor * anchorStride]))
-            ny = Float(_Float16(bitPattern: ptr[1 * featStride + bestAnchor * anchorStride]))
-            nw = Float(_Float16(bitPattern: ptr[2 * featStride + bestAnchor * anchorStride]))
-            nh = Float(_Float16(bitPattern: ptr[3 * featStride + bestAnchor * anchorStride]))
+            nx = Float(Float16(bitPattern: ptr[0 * featStride + bestAnchor * anchorStride]))
+            ny = Float(Float16(bitPattern: ptr[1 * featStride + bestAnchor * anchorStride]))
+            nw = Float(Float16(bitPattern: ptr[2 * featStride + bestAnchor * anchorStride]))
+            nh = Float(Float16(bitPattern: ptr[3 * featStride + bestAnchor * anchorStride]))
         } else {
             let ptr = dataPointer.assumingMemoryBound(to: Float.self)
             let featStride = strides[1]

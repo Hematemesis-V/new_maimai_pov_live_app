@@ -65,7 +65,5 @@ targets:
     dependencies:
       - package: HaishinKit
         product: HaishinKit
-      - package: HaishinKit
-        product: RTMPHaishinKit
     entitlements:
       path: MaimaiPOV/App/MaimaiPOV.entitlements

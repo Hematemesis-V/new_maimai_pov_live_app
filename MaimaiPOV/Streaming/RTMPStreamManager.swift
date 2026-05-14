@@ -1,6 +1,5 @@
 import SwiftUI
 import HaishinKit
-import RTMPHaishinKit
 import CoreMedia
 
 enum StreamResolution: String, CaseIterable {

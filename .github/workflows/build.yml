@@ -22,7 +22,7 @@ jobs:
       - name: Setup Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: "16.0"
+          xcode-version: "16.2"
 
       - name: Verify Core ML Model
         run: |

@@ -67,4 +67,10 @@ enum Config {
     // Audio encoding
     static let audioSampleRate: Double = 44100.0
     static let audioBitrate: Int = 128_000
+
+    // Streaming buffer & reconnect
+    static let streamVideoBufferFrames: Int = 120
+    static let streamAudioBufferFrames: Int = 200
+    static let maxReconnectAttempts: Int = 5
+    static let maxReconnectDelaySeconds: Double = 16.0
 }

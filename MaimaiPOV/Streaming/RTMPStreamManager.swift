@@ -38,6 +38,15 @@ class RTMPStreamManager: ObservableObject {
     private var videoFormatDescription: CMVideoFormatDescription?
     private let lock = NSLock()
 
+    private var rtmpUrl: String = ""
+    private var streamKey: String = ""
+    private var reconnectAttempt: Int = 0
+    private var reconnectTask: Task<Void, Never>?
+
+    private var videoBufferCount: Int = 0
+    private var audioBufferCount: Int = 0
+    private let bufferCountLock = NSLock()
+
     @MainActor
     func startPublish(url: String, streamKey: String) {
         guard !isStreaming else { return }
@@ -45,7 +54,14 @@ class RTMPStreamManager: ObservableObject {
             streamStatus = "Error: URL/Key empty"
             return
         }
+        self.rtmpUrl = url
+        self.streamKey = streamKey
+        self.reconnectAttempt = 0
+        isStreaming = true
+        connectAndPublish()
+    }
 
+    private func connectAndPublish() {
         let connection = RTMPConnection()
         let stream = RTMPStream(connection: connection)
 
@@ -66,29 +82,66 @@ class RTMPStreamManager: ObservableObject {
         self.stream = stream
         lock.unlock()
 
-        let vStream = AsyncStream<CMSampleBuffer> { continuation in
-            self.videoContinuation = continuation
+        setupStreamPipelines(stream)
+
+        let attempt = reconnectAttempt
+        Task { @MainActor in
+            if attempt > 0 {
+                self.streamStatus = "重连中(\(attempt)/\(Config.maxReconnectAttempts))..."
+            } else {
+                self.streamStatus = "Connecting"
+            }
+            DebugInfoManager.shared.rtmpStatus = self.streamStatus
+            DebugInfoManager.shared.log("RTMP: \(self.streamStatus)")
         }
-        videoIngestTask = Task { [weak stream] in
+
+        setupStatusMonitoring(connection: connection, stream: stream)
+
+        Task { [weak self] in
+            do {
+                _ = try await connection.connect(rtmpUrl)
+                _ = try await stream.publish(streamKey)
+                await MainActor.run {
+                    self?.reconnectAttempt = 0
+                    self?.streamStatus = "Publishing"
+                    DebugInfoManager.shared.rtmpStatus = "Publishing"
+                    DebugInfoManager.shared.log("RTMP: Publishing")
+                }
+            } catch {
+                await MainActor.run {
+                    self?.attemptReconnect(reason: error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    private func setupStreamPipelines(_ stream: RTMPStream) {
+        let (vStream, vContinuation) = AsyncStream<CMSampleBuffer>.makeStream(
+            of: CMSampleBuffer.self,
+            bufferingPolicy: .bufferingNewest(Config.streamVideoBufferFrames)
+        )
+        videoContinuation = vContinuation
+        videoIngestTask = Task { [weak self, weak stream] in
             for await buffer in vStream {
+                self?.decrementVideoBufferCount()
                 await stream?.append(buffer)
             }
         }
 
-        let aStream = AsyncStream<(AVAudioBuffer, AVAudioTime)> { continuation in
-            self.audioContinuation = continuation
-        }
-        audioIngestTask = Task { [weak stream] in
+        let (aStream, aContinuation) = AsyncStream<(AVAudioBuffer, AVAudioTime)>.makeStream(
+            of: (AVAudioBuffer, AVAudioTime).self,
+            bufferingPolicy: .bufferingNewest(Config.streamAudioBufferFrames)
+        )
+        audioContinuation = aContinuation
+        audioIngestTask = Task { [weak self, weak stream] in
             for await (buffer, when) in aStream {
+                self?.decrementAudioBufferCount()
                 await stream?.append(buffer, when: when)
             }
         }
+    }
 
-        isStreaming = true
-        streamStatus = "Connecting"
-        DebugInfoManager.shared.rtmpStatus = "Connecting"
-        DebugInfoManager.shared.log("RTMP: Connecting")
-
+    private func setupStatusMonitoring(connection: RTMPConnection, stream: RTMPStream) {
         statusTask = Task { [weak self] in
             for await status in await connection.status {
                 let code = status.code
@@ -124,31 +177,14 @@ class RTMPStreamManager: ObservableObject {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
             }
         }
-
-        Task { [weak self] in
-            do {
-                _ = try await connection.connect(url)
-                _ = try await stream.publish(streamKey)
-                await MainActor.run {
-                    self?.streamStatus = "Publishing"
-                    DebugInfoManager.shared.rtmpStatus = "Publishing"
-                    DebugInfoManager.shared.log("RTMP: Publishing")
-                }
-            } catch {
-                await MainActor.run {
-                    self?.streamStatus = "Failed: \(error.localizedDescription)"
-                    DebugInfoManager.shared.rtmpStatus = "Failed"
-                    DebugInfoManager.shared.log("RTMP: Failed - \(error.localizedDescription)")
-                    self?.isStreaming = false
-                    self?.cleanup()
-                }
-            }
-        }
     }
 
     @MainActor
     func stopPublish() {
         guard isStreaming else { return }
+        reconnectTask?.cancel()
+        reconnectTask = nil
+        reconnectAttempt = 0
 
         let stream: RTMPStream?
         let connection: RTMPConnection?
@@ -219,6 +255,16 @@ class RTMPStreamManager: ObservableObject {
 
         guard result == noErr, let finalSampleBuffer = sampleBuffer else { return }
 
+        bufferCountLock.lock()
+        videoBufferCount += 1
+        let count = videoBufferCount
+        bufferCountLock.unlock()
+
+        if count > Int(Double(Config.streamVideoBufferFrames) * 1.5) {
+            forceClearBuffers()
+            return
+        }
+
         videoContinuation?.yield(finalSampleBuffer)
     }
 
@@ -255,16 +301,47 @@ class RTMPStreamManager: ObservableObject {
     }
 
     @MainActor
+    private func attemptReconnect(reason: String? = nil) {
+        reconnectAttempt += 1
+        if reconnectAttempt > Config.maxReconnectAttempts {
+            streamStatus = "重连失败，请手动重试"
+            DebugInfoManager.shared.rtmpStatus = "重连失败"
+            DebugInfoManager.shared.log("RTMP: 重连失败 - \(reason ?? "unknown")")
+            isStreaming = false
+            cleanup()
+            return
+        }
+
+        let delay = min(pow(2.0, Double(reconnectAttempt - 1)), Config.maxReconnectDelaySeconds)
+        streamStatus = "重连中(\(reconnectAttempt)/\(Config.maxReconnectAttempts))..."
+        DebugInfoManager.shared.rtmpStatus = streamStatus
+        DebugInfoManager.shared.log("RTMP: \(streamStatus) \(String(format: "%.0fs后重试", delay))")
+
+        reconnectTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard let self, self.isStreaming else { return }
+            self.resetStreams()
+            await MainActor.run {
+                self.connectAndPublish()
+            }
+        }
+    }
+
+    @MainActor
     private func handleConnectionStatus(_ code: String) {
         switch code {
         case "NetConnection.Connect.Success":
             streamStatus = "Connected"
             DebugInfoManager.shared.rtmpStatus = "Connected"
             DebugInfoManager.shared.log("RTMP: Connected")
-        case "NetConnection.Connect.Closed", "NetConnection.Connect.Failed", "NetConnection.Connect.Rejected":
-            streamStatus = code.components(separatedBy: ".").last ?? "Error"
-            DebugInfoManager.shared.rtmpStatus = streamStatus
-            DebugInfoManager.shared.log("RTMP: \(streamStatus)")
+        case "NetConnection.Connect.Closed":
+            attemptReconnect(reason: "连接关闭")
+        case "NetConnection.Connect.Failed":
+            attemptReconnect(reason: "连接失败")
+        case "NetConnection.Connect.Rejected":
+            streamStatus = "Rejected"
+            DebugInfoManager.shared.rtmpStatus = "Rejected"
+            DebugInfoManager.shared.log("RTMP: Rejected - 不重连")
             isStreaming = false
             cleanup()
         default: break
@@ -275,46 +352,79 @@ class RTMPStreamManager: ObservableObject {
     private func handleStreamStatus(_ code: String) {
         switch code {
         case "NetStream.Publish.Start":
-            streamStatus = "Publishing"
-            DebugInfoManager.shared.rtmpStatus = "Publishing"
-            DebugInfoManager.shared.log("RTMP: Publishing")
+            if reconnectAttempt == 0 {
+                streamStatus = "Publishing"
+                DebugInfoManager.shared.rtmpStatus = "Publishing"
+                DebugInfoManager.shared.log("RTMP: Publishing")
+            }
         case "NetStream.Publish.BadName":
             streamStatus = "BadName"
             DebugInfoManager.shared.rtmpStatus = "BadName"
             DebugInfoManager.shared.log("RTMP: BadName")
         case "NetStream.Connect.Closed", "NetStream.Unpublish.Success":
             if isStreaming {
-                streamStatus = "Stream Closed"
-                DebugInfoManager.shared.rtmpStatus = "Stream Closed"
-                DebugInfoManager.shared.log("RTMP: Stream closed")
-                isStreaming = false
-                cleanup()
+                attemptReconnect(reason: "流关闭")
             }
         default: break
         }
     }
 
-    private func cleanup() {
-        statusTask?.cancel()
-        statusTask = nil
-        streamStatusTask?.cancel()
-        streamStatusTask = nil
-        statsTask?.cancel()
-        statsTask = nil
+    private func decrementVideoBufferCount() {
+        bufferCountLock.lock()
+        videoBufferCount = max(0, videoBufferCount - 1)
+        bufferCountLock.unlock()
+    }
 
+    private func decrementAudioBufferCount() {
+        bufferCountLock.lock()
+        audioBufferCount = max(0, audioBufferCount - 1)
+        bufferCountLock.unlock()
+    }
+
+    private func forceClearBuffers() {
+        bufferCountLock.lock()
+        videoBufferCount = 0
+        audioBufferCount = 0
+        bufferCountLock.unlock()
         videoContinuation?.finish()
-        videoContinuation = nil
         audioContinuation?.finish()
-        audioContinuation = nil
-        videoIngestTask?.cancel()
-        videoIngestTask = nil
-        audioIngestTask?.cancel()
-        audioIngestTask = nil
-
         lock.lock()
+        if let s = stream {
+            videoContinuation = nil
+            audioContinuation = nil
+            lock.unlock()
+            setupStreamPipelines(s)
+        } else {
+            lock.unlock()
+        }
+        videoFormatDescription = nil
+        DebugInfoManager.shared.log("RTMP: 缓冲区强制清空")
+    }
+
+    private func resetStreams() {
+        statusTask?.cancel(); statusTask = nil
+        streamStatusTask?.cancel(); streamStatusTask = nil
+        statsTask?.cancel(); statsTask = nil
+        videoContinuation?.finish(); videoContinuation = nil
+        audioContinuation?.finish(); audioContinuation = nil
+        videoIngestTask?.cancel(); videoIngestTask = nil
+        audioIngestTask?.cancel(); audioIngestTask = nil
+        lock.lock()
+        if let s = stream { _ = try? s.close() }
+        if let c = connection { _ = try? c.close() }
         stream = nil
         connection = nil
         lock.unlock()
         videoFormatDescription = nil
+        bufferCountLock.lock()
+        videoBufferCount = 0
+        audioBufferCount = 0
+        bufferCountLock.unlock()
+    }
+
+    private func cleanup() {
+        reconnectTask?.cancel()
+        reconnectTask = nil
+        resetStreams()
     }
 }

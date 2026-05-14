@@ -398,7 +398,9 @@ class RTMPStreamManager: ObservableObject {
             lock.unlock()
         }
         videoFormatDescription = nil
-        DebugInfoManager.shared.log("RTMP: 缓冲区强制清空")
+        Task { @MainActor in
+            DebugInfoManager.shared.log("RTMP: 缓冲区强制清空")
+        }
     }
 
     private func resetStreams() {
@@ -410,11 +412,15 @@ class RTMPStreamManager: ObservableObject {
         videoIngestTask?.cancel(); videoIngestTask = nil
         audioIngestTask?.cancel(); audioIngestTask = nil
         lock.lock()
-        if let s = stream { _ = try? s.close() }
-        if let c = connection { _ = try? c.close() }
+        let oldStream = stream
+        let oldConnection = connection
         stream = nil
         connection = nil
         lock.unlock()
+        Task {
+            if let s = oldStream { _ = try? await s.close() }
+            if let c = oldConnection { _ = try? await c.close() }
+        }
         videoFormatDescription = nil
         bufferCountLock.lock()
         videoBufferCount = 0

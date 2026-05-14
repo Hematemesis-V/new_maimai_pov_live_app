@@ -141,16 +141,20 @@ class CameraCaptureManager: NSObject, ObservableObject {
             try? audioSession.setCategory(.playAndRecord, mode: .videoRecording, options: [.defaultToSpeaker, .allowBluetooth])
             try? audioSession.setActive(true)
 
-            if let inputs = audioSession.availableInputs {
-                let builtInMic = inputs.first(where: { $0.portType == .builtInMic })
-                if let dataSources = builtInMic?.dataSources {
-                    let backMic = dataSources.first(where: { $0.orientation == .back })
-                    try? builtInMic?.setPreferredDataSource(backMic)
-                    if let supportedPatterns = backMic?.supportedPolarPatterns, supportedPatterns.contains(.cardioid) {
-                        try? backMic?.setPreferredPolarPattern(.cardioid)
+            if let inputs = audioSession.availableInputs,
+               let builtInMicInput = inputs.first(where: { $0.portType == .builtInMic }) {
+                try? audioSession.setPreferredInput(builtInMicInput)
+
+                if let dataSources = builtInMicInput.dataSources,
+                   let backMic = dataSources.first(where: { $0.orientation == .back }) {
+                    if let supportedPatterns = backMic.supportedPolarPatterns, supportedPatterns.contains(.cardioid) {
+                        try? backMic.setPreferredPolarPattern(.cardioid)
                     }
+                    try? builtInMicInput.setPreferredDataSource(backMic)
                 }
             }
+
+            try? audioSession.setPreferredInputOrientation(.portrait)
 
             guard let audioDevice = AVCaptureDevice.default(for: .audio),
                   let audioInput = try? AVCaptureDeviceInput(device: audioDevice),

@@ -149,118 +149,116 @@ class YOLODetector {
     private func infer(_ pixelBuffer: CVPixelBuffer, preprocessMs: Double) -> DetectionResult? {
         let start = CACurrentMediaTime()
 
-        guard let input = try? bestInput(
-            image: pixelBuffer,
-            iouThreshold: 0.45,
-            confidenceThreshold: Double(Config.defaultConfidenceThreshold)
-        ) else { return nil }
+        guard let input = try? bestInput(image: pixelBuffer) else { return nil }
         guard let output = try? model.prediction(input: input) else { return nil }
 
         let elapsed = CACurrentMediaTime() - start
 
-        let confidence = output.confidence
-        let coordinates = output.coordinates
+        let featureProvider = output as? MLFeatureProvider
+        guard let feature = featureProvider?.features.first,
+              let multiArray = feature.multiArrayValue else { return nil }
 
-        let confShape = confidence.shape
-        let numBoxes = confShape[0].intValue
-        let numClasses = confShape[1].intValue
+        let shape = multiArray.shape
+        guard shape.count == 3 else { return nil }
+        let numFeatures = shape[1].intValue
+        let numAnchors = shape[2].intValue
 
-        let innerClass = 1
+        let strides = multiArray.strides.map { $0.intValue }
+        let dataPointer = multiArray.dataPointer
+
+        let isFloat16 = multiArray.dataType == .float16
+
+        let innerClassIdx = 5
         let confThresh = Config.defaultConfidenceThreshold
-        let yoloSize = Float(Config.yoloInputSize)
-
-        let confPtr = UnsafeMutablePointer<Float>(OpaquePointer(confidence.dataPointer))
-        let coordPtr = UnsafeMutablePointer<Float>(OpaquePointer(coordinates.dataPointer))
-        let confStride = numClasses
-
-        struct BoxInfo {
-            let index: Int
-            let conf: Float
-            let nx: Float
-            let ny: Float
-            let nw: Float
-            let nh: Float
-            let area: Float
-        }
-
-        var innerBoxes: [BoxInfo] = []
-
-        for i in 0..<numBoxes {
-            let idx = i * confStride + innerClass
-            guard idx < confidence.count else { continue }
-            let c = confPtr[idx]
-            if c >= confThresh {
-                let nx = coordPtr[i * 4 + 0]
-                let ny = coordPtr[i * 4 + 1]
-                let nw = coordPtr[i * 4 + 2]
-                let nh = coordPtr[i * 4 + 3]
-                let area = nw * nh
-                innerBoxes.append(BoxInfo(index: i, conf: c, nx: nx, ny: ny, nw: nw, nh: nh, area: area))
-            }
-        }
-
-        let innerScreenCount = innerBoxes.count
-
-        let sortedByArea = innerBoxes.sorted { $0.area > $1.area }
-
-        var topBoxesStr = ""
-        for (rank, box) in sortedByArea.prefix(3).enumerated() {
-            if rank > 0 { topBoxesStr += " " }
-            topBoxesStr += String(format: "%d:%.2f,%.2f,%.2f,%.2f,c%.2f",
-                rank + 1, box.nx, box.ny, box.nw, box.nh, box.conf)
-        }
-        if topBoxesStr.isEmpty { topBoxesStr = "--" }
 
         var bestConf: Float = 0
-        var bestIdx = -1
-        for box in innerBoxes {
-            if box.conf > bestConf {
-                bestConf = box.conf
-                bestIdx = box.index
-            }
-        }
+        var bestAnchor = -1
+        var aboveThreshCount = 0
 
-        var bestBoxRank = 0
-        if bestIdx >= 0 {
-            for (rank, box) in sortedByArea.enumerated() {
-                if box.index == bestIdx {
-                    bestBoxRank = rank + 1
-                    break
+        if isFloat16 {
+            let ptr = dataPointer.assumingMemoryBound(to: UInt16.self)
+            let fStride = strides[0]
+            let featStride = strides[1]
+            let anchorStride = strides[2]
+
+            for a in 0..<numAnchors {
+                let confRaw = ptr[innerClassIdx * featStride + a * anchorStride]
+                let conf = Float(_Float16(bitPattern: confRaw))
+                if conf >= confThresh {
+                    aboveThreshCount += 1
+                    if conf > bestConf {
+                        bestConf = conf
+                        bestAnchor = a
+                    }
+                }
+            }
+        } else {
+            let ptr = dataPointer.assumingMemoryBound(to: Float.self)
+            let fStride = strides[0]
+            let featStride = strides[1]
+            let anchorStride = strides[2]
+
+            for a in 0..<numAnchors {
+                let conf = ptr[innerClassIdx * featStride + a * anchorStride]
+                if conf >= confThresh {
+                    aboveThreshCount += 1
+                    if conf > bestConf {
+                        bestConf = conf
+                        bestAnchor = a
+                    }
                 }
             }
         }
 
-        guard bestIdx >= 0 else {
+        guard bestAnchor >= 0 else {
             return DetectionResult(
                 detected: false, confidence: 0,
                 stabCx: 0, stabCy: 0, stabW: 0, stabH: 0,
                 rawYoloCx: 0, rawYoloCy: 0, rawYoloW: 0, rawYoloH: 0,
                 rawNx: 0, rawNy: 0, rawNw: 0, rawNh: 0,
                 inferenceMs: elapsed * 1000.0, preprocessMs: preprocessMs,
-                allBoxesCount: numBoxes, innerScreenBoxesCount: 0,
-                topBoxes: topBoxesStr, bestBoxRank: 0
+                allBoxesCount: numAnchors, innerScreenBoxesCount: 0,
+                topBoxes: "--", bestBoxRank: 0
             )
         }
 
-        let nx = coordPtr[bestIdx * 4 + 0]
-        let ny = coordPtr[bestIdx * 4 + 1]
-        let nw = coordPtr[bestIdx * 4 + 2]
-        let nh = coordPtr[bestIdx * 4 + 3]
+        var nx: Float = 0, ny: Float = 0, nw: Float = 0, nh: Float = 0
 
+        if isFloat16 {
+            let ptr = dataPointer.assumingMemoryBound(to: UInt16.self)
+            let featStride = strides[1]
+            let anchorStride = strides[2]
+            nx = Float(_Float16(bitPattern: ptr[0 * featStride + bestAnchor * anchorStride]))
+            ny = Float(_Float16(bitPattern: ptr[1 * featStride + bestAnchor * anchorStride]))
+            nw = Float(_Float16(bitPattern: ptr[2 * featStride + bestAnchor * anchorStride]))
+            nh = Float(_Float16(bitPattern: ptr[3 * featStride + bestAnchor * anchorStride]))
+        } else {
+            let ptr = dataPointer.assumingMemoryBound(to: Float.self)
+            let featStride = strides[1]
+            let anchorStride = strides[2]
+            nx = ptr[0 * featStride + bestAnchor * anchorStride]
+            ny = ptr[1 * featStride + bestAnchor * anchorStride]
+            nw = ptr[2 * featStride + bestAnchor * anchorStride]
+            nh = ptr[3 * featStride + bestAnchor * anchorStride]
+        }
+
+        let yoloSize = Float(Config.yoloInputSize)
         let rawCx = nx * yoloSize
         let rawCy = ny * yoloSize
         let rawW = nw * yoloSize
         let rawH = nh * yoloSize
 
-        if rawW < 5.0 || rawH < 5.0 || rawCx < 0 || rawCx > yoloSize || rawCy < 0 || rawCy > yoloSize {
+        let topBoxesStr = String(format: "1:%.3f,%.3f,%.3f,%.3f,c%.2f", nx, ny, nw, nh, bestConf)
+
+        if rawW < 5.0 || rawH < 5.0 {
             return DetectionResult(
                 detected: false, confidence: bestConf,
                 stabCx: 0, stabCy: 0, stabW: 0, stabH: 0,
                 rawYoloCx: rawCx, rawYoloCy: rawCy, rawYoloW: rawW, rawYoloH: rawH,
                 rawNx: nx, rawNy: ny, rawNw: nw, rawNh: nh,
                 inferenceMs: elapsed * 1000.0, preprocessMs: preprocessMs,
-                allBoxesCount: numBoxes, innerScreenBoxesCount: innerScreenCount,
-                topBoxes: topBoxesStr, bestBoxRank: bestBoxRank
+                allBoxesCount: numAnchors, innerScreenBoxesCount: aboveThreshCount,
+                topBoxes: topBoxesStr, bestBoxRank: 1
             )
         }
 
@@ -275,8 +273,8 @@ class YOLODetector {
             rawYoloCx: rawCx, rawYoloCy: rawCy, rawYoloW: rawW, rawYoloH: rawH,
             rawNx: nx, rawNy: ny, rawNw: nw, rawNh: nh,
             inferenceMs: elapsed * 1000.0, preprocessMs: preprocessMs,
-            allBoxesCount: numBoxes, innerScreenBoxesCount: innerScreenCount,
-            topBoxes: topBoxesStr, bestBoxRank: bestBoxRank
+            allBoxesCount: numAnchors, innerScreenBoxesCount: aboveThreshCount,
+            topBoxes: topBoxesStr, bestBoxRank: 1
         )
     }
 }

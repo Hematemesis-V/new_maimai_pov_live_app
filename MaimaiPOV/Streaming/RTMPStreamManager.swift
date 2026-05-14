@@ -15,7 +15,6 @@ enum StreamResolution: String, CaseIterable {
     }
 }
 
-@MainActor
 class RTMPStreamManager: ObservableObject {
     @Published var isStreaming: Bool = false
     @Published var streamStatus: String = "Idle"
@@ -27,7 +26,9 @@ class RTMPStreamManager: ObservableObject {
     private var statusTask: Task<Void, Never>?
     private var streamStatusTask: Task<Void, Never>?
     private var videoFormatDescription: CMVideoFormatDescription?
+    private let lock = NSLock()
 
+    @MainActor
     func startPublish(url: String, streamKey: String) {
         guard !isStreaming else { return }
         guard !url.isEmpty, !streamKey.isEmpty else {
@@ -50,16 +51,19 @@ class RTMPStreamManager: ObservableObject {
             await stream.setAudioSettings(AudioCodecSettings(bitRate: Config.audioBitrate))
         }
 
+        lock.lock()
         self.connection = connection
         self.stream = stream
-        self.isStreaming = true
-        self.streamStatus = "Connecting"
+        lock.unlock()
+
+        isStreaming = true
+        streamStatus = "Connecting"
         DebugInfoManager.shared.rtmpStatus = "Connecting"
 
         statusTask = Task { [weak self] in
             for await status in await connection.status {
                 let code = status.code
-                await MainActor.run {
+                Task { @MainActor in
                     self?.handleConnectionStatus(code)
                 }
             }
@@ -68,7 +72,7 @@ class RTMPStreamManager: ObservableObject {
         streamStatusTask = Task { [weak self] in
             for await status in await stream.status {
                 let code = status.code
-                await MainActor.run {
+                Task { @MainActor in
                     self?.handleStreamStatus(code)
                 }
             }
@@ -93,11 +97,16 @@ class RTMPStreamManager: ObservableObject {
         }
     }
 
+    @MainActor
     func stopPublish() {
         guard isStreaming else { return }
 
-        let stream = self.stream
-        let connection = self.connection
+        let stream: RTMPStream?
+        let connection: RTMPConnection?
+        lock.lock()
+        stream = self.stream
+        connection = self.connection
+        lock.unlock()
 
         Task {
             if let stream {
@@ -115,7 +124,12 @@ class RTMPStreamManager: ObservableObject {
     }
 
     func appendVideo(pixelBuffer: CVPixelBuffer, timestamp: CMTime) {
-        guard isStreaming, let stream else { return }
+        lock.lock()
+        let currentStream = stream
+        let streaming = isStreaming
+        lock.unlock()
+
+        guard streaming, let currentStream else { return }
 
         let width = CVPixelBufferGetWidth(pixelBuffer)
         let height = CVPixelBufferGetHeight(pixelBuffer)
@@ -167,18 +181,24 @@ class RTMPStreamManager: ObservableObject {
         guard result == noErr, let sampleBuffer else { return }
 
         Task {
-            await stream.append(sampleBuffer)
+            await currentStream.append(sampleBuffer)
         }
     }
 
     func appendAudio(sampleBuffer: CMSampleBuffer) {
-        guard isStreaming, let stream else { return }
+        lock.lock()
+        let currentStream = stream
+        let streaming = isStreaming
+        lock.unlock()
+
+        guard streaming, let currentStream else { return }
 
         Task {
-            await stream.append(sampleBuffer)
+            await currentStream.append(sampleBuffer)
         }
     }
 
+    @MainActor
     private func handleConnectionStatus(_ code: String) {
         switch code {
         case "NetConnection.Connect.Success":
@@ -206,6 +226,7 @@ class RTMPStreamManager: ObservableObject {
         }
     }
 
+    @MainActor
     private func handleStreamStatus(_ code: String) {
         switch code {
         case "NetStream.Publish.Start":
@@ -234,8 +255,10 @@ class RTMPStreamManager: ObservableObject {
         statusTask = nil
         streamStatusTask?.cancel()
         streamStatusTask = nil
+        lock.lock()
         stream = nil
         connection = nil
+        lock.unlock()
         videoFormatDescription = nil
     }
 }

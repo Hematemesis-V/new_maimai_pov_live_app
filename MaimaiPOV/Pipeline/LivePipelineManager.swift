@@ -225,7 +225,6 @@ class LivePipelineManager: ObservableObject {
                 DispatchQueue.main.async {
                     self.lagMs = elapsed * 1000.0
                     self.debug.stabLagMs = elapsed * 1000.0
-                    self.objectWillChange.send()
                 }
             }
         }

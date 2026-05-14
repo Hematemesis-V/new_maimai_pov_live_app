@@ -70,6 +70,7 @@ class TextureReadback {
         self.pixelBufferPool = pool
     }
 
+    @available(*, deprecated, message: "Use readAsync(from:completion:) instead")
     func read(from texture: MTLTexture) -> CVPixelBuffer? {
         let index = currentIndex
         currentIndex = (index + 1) % Self.bufferCount

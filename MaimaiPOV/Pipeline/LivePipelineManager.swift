@@ -52,7 +52,7 @@ class LivePipelineManager: ObservableObject {
     var latestTrackOutput: SmoothTracker.TrackOutput?
 
     var onStreamBufferAvailable: ((CVPixelBuffer, CMTime) -> Void)?
-    var onAudioSampleAvailable: ((CMSampleBuffer) -> Void)?
+    var onAudioSampleAvailable: ((CMSampleBuffer, Double) -> Void)?
 
     var previewTexture: MTLTexture? {
         if let cr = cropRenderer {
@@ -213,13 +213,16 @@ class LivePipelineManager: ObservableObject {
                     }
                 }
 
-                if let readback = self.textureReadback,
-                   let cr = self.cropRenderer,
-                   let pixelBuffer = readback.read(from: cr.outputTexture) {
+                if let readback = self.textureReadback, let cr = self.cropRenderer {
                     let timestamp = CMTime(seconds: alignedTime, preferredTimescale: 1000000000)
-                    self.streamFrameCount += 1
-                    self.onStreamBufferAvailable?(pixelBuffer, timestamp)
-                    self.streamManager.appendVideo(pixelBuffer: pixelBuffer, timestamp: timestamp)
+                    readback.readAsync(from: cr.outputTexture) { [weak self] pixelBuffer in
+                        self?.pipelineQueue.async {
+                            guard let self = self else { return }
+                            self.streamFrameCount += 1
+                            self.onStreamBufferAvailable?(pixelBuffer, timestamp)
+                            self.streamManager.appendVideo(pixelBuffer: pixelBuffer, timestamp: timestamp)
+                        }
+                    }
                 }
 
                 DispatchQueue.main.async {
@@ -229,9 +232,9 @@ class LivePipelineManager: ObservableObject {
             }
         }
 
-        camera.onAudioSample = { [weak self] sample in
-            self?.onAudioSampleAvailable?(sample)
-            self?.streamManager.appendAudio(sampleBuffer: sample)
+        camera.onAudioSample = { [weak self] sample, alignedTime in
+            self?.onAudioSampleAvailable?(sample, alignedTime)
+            self?.streamManager.appendAudio(sampleBuffer: sample, alignedTime: alignedTime)
         }
 
         startFPSTimer()

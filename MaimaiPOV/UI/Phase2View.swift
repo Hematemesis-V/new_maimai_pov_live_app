@@ -11,8 +11,6 @@ import UIKit
 struct Phase2View: View {
     @StateObject private var pipeline = LivePipelineManager()
     @State private var controlsExpanded: Bool = true
-    @State private var frameCount: Int = 0
-    private let fpsTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -25,7 +23,7 @@ struct Phase2View: View {
         .background(Color.black)
         .onAppear {
             UIApplication.shared.isIdleTimerDisabled = true
-            setupPipeline()
+            pipeline.start()
         }
         .onChange(of: pipeline.selectedLens) { newLens in
             pipeline.camera.switchLens(to: newLens)
@@ -78,16 +76,8 @@ struct Phase2View: View {
             pipeline.smoothTracker.targetRatio = Float(newVal)
             pipeline.debug.trackTargetRatio = Float(newVal)
         }
-        .onReceive(fpsTimer) { _ in
-            pipeline.currentFPS = Double(frameCount)
-            pipeline.debug.fps = Double(frameCount)
-            pipeline.debug.frameCount = frameCount
-            frameCount = 0
-        }
         .onDisappear {
-            pipeline.camera.onVideoFrame = nil
-            pipeline.camera.stopRunning()
-            MotionManager.shared.stopUpdates()
+            pipeline.stop()
         }
     }
 
@@ -405,134 +395,6 @@ struct Phase2View: View {
             content()
             valueLabel()
         }
-    }
-
-    private func setupPipeline() {
-        let lensCfg = LensCalibration.config(for: pipeline.selectedLens, inputWidth: Config.inputWidth)
-        let stab = MetalStabilizer(device: pipeline.device, lensConfig: lensCfg)
-        stab?.stabilizerEnabled = pipeline.stabEnabled
-        stab?.fov = pipeline.fov
-        pipeline.stabilizer = stab
-
-        pipeline.debug.fov = pipeline.fov
-        pipeline.debug.distRatio = pipeline.distRatio
-        pipeline.debug.stabEnabled = pipeline.stabEnabled
-        pipeline.debug.lensType = pipeline.selectedLens.rawValue
-        pipeline.debug.log("Pipeline initialized: \(pipeline.selectedLens.rawValue)")
-
-        let cropR = CropRenderer(device: pipeline.device)
-        pipeline.cropRenderer = cropR
-
-        pipeline.trackAlpha = Double(pipeline.smoothTracker.alpha)
-        pipeline.trackMaxSpeed = Double(pipeline.smoothTracker.maxSpeed)
-        pipeline.trackDeadZone = Double(pipeline.smoothTracker.deadZone)
-        pipeline.trackTargetRatio = Double(pipeline.smoothTracker.targetRatio)
-
-        let detector = YOLODetector(device: pipeline.device)
-        pipeline.yoloDetector = detector
-        let tracker = pipeline.smoothTracker
-        var yoloPreviewFrameCount = 0
-        if detector != nil {
-            detector?.onDetection = { [weak debug = pipeline.debug, weak detector, weak tracker] result in
-                DispatchQueue.main.async {
-                    debug?.yoloDetected = result.detected
-                    debug?.yoloConfidence = result.confidence
-                    debug?.yoloInferenceMs = result.inferenceMs
-                    debug?.yoloPreprocessMs = result.preprocessMs
-                    debug?.yoloRawCoord = result.detected
-                        ? String(format: "%.0f,%.0f,%.0f,%.0f",
-                            result.rawYoloCx, result.rawYoloCy, result.rawYoloW, result.rawYoloH)
-                        : "--"
-                    debug?.yoloStabCoord = result.detected
-                        ? String(format: "%.0f,%.0f,%.0f,%.0f",
-                            result.stabCx, result.stabCy, result.stabW, result.stabH)
-                        : "--"
-                    debug?.yoloBoxesInfo = "\(result.innerScreenBoxesCount)/\(result.allBoxesCount)"
-                    debug?.yoloTopBoxes = result.topBoxes
-                    debug?.yoloBestRank = result.bestBoxRank
-
-                    if let t = tracker {
-                        let track = t.update(
-                            detected: result.detected,
-                            stabCx: result.stabCx,
-                            stabCy: result.stabCy,
-                            stabW: result.stabW,
-                            stabH: result.stabH
-                        )
-                        pipeline.latestTrackOutput = track
-                        debug?.trackCx = track.cx
-                        debug?.trackCy = track.cy
-                        debug?.trackCropW = track.cropW
-                        debug?.trackCropH = track.cropH
-                        debug?.trackSmoothCx = track.smoothCx
-                        debug?.trackSmoothCy = track.smoothCy
-                        debug?.trackSmoothW = track.smoothW
-                        debug?.trackSmoothH = track.smoothH
-                        debug?.trackState = track.state
-                    }
-
-                    yoloPreviewFrameCount += 1
-                    if yoloPreviewFrameCount % 10 == 0,
-                       let pb = detector?.previewPixelBuffer {
-                        let ciImage = CIImage(cvPixelBuffer: pb)
-                        let context = CIContext()
-                        if let cgImage = context.createCGImage(ciImage, from: ciImage.extent) {
-                            debug?.yoloPreviewImage = UIImage(cgImage: cgImage)
-                        }
-                    }
-                }
-            }
-            detector?.start()
-            pipeline.debug.log("YOLO detector initialized and started")
-        }
-
-        let u = YOLOPreprocessUniforms(padding: Config.yoloPadding)
-        pipeline.debug.yoloUniforms = String(format: "s%.3f pH%.0f pV%.0f pL%.0f pT%.0f",
-            u.scale, u.padH, u.padV, u.padLeft, u.padTop)
-
-        pipeline.camera.checkPermissionAndStart()
-        pipeline.camera.setFocus(Float(pipeline.focusValue))
-        MotionManager.shared.startUpdates()
-
-        pipeline.camera.onVideoFrame = { [weak camera = pipeline.camera] pixelBuffer, alignedTime in
-            frameCount += 1
-            guard let stab = pipeline.stabilizer, stab.stabilizerEnabled else { return }
-
-            let centerTime = alignedTime + (Config.syncOffsetMs / 1000.0)
-            let topTime    = centerTime - (Config.readoutTimeMs / 2000.0)
-            let bottomTime = centerTime + (Config.readoutTimeMs / 2000.0)
-
-            guard let qCenter = MotionManager.shared.getQuaternion(at: centerTime),
-                  let qTop    = MotionManager.shared.getQuaternion(at: topTime),
-                  let qBottom = MotionManager.shared.getQuaternion(at: bottomTime) else { return }
-
-            let start = CACurrentMediaTime()
-            stab.process(pixelBuffer: pixelBuffer, qCenter: qCenter, qTop: qTop, qBottom: qBottom)
-            let elapsed = CACurrentMediaTime() - start
-            DispatchQueue.main.async {
-                pipeline.lagMs = elapsed * 1000.0
-                pipeline.debug.stabLagMs = elapsed * 1000.0
-            }
-
-            if pipeline.yoloEnabled, let detector = pipeline.yoloDetector {
-                detector.enqueue(stabTexture: stab.outputTexture)
-            }
-
-            if let cr = pipeline.cropRenderer {
-                if let track = pipeline.latestTrackOutput {
-                    cr.process(stabTexture: stab.outputTexture,
-                               cx: track.cx, cy: track.cy,
-                               cropW: track.cropW, cropH: track.cropH)
-                } else {
-                    let fb = cr.makeFallbackTrack()
-                    cr.process(stabTexture: stab.outputTexture,
-                               cx: fb.cx, cy: fb.cy,
-                               cropW: fb.cropW, cropH: fb.cropH)
-                }
-            }
-        }
-
-        pipeline.camera.onAudioSample = { _ in }
     }
 
     private func applyExposure() {

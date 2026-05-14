@@ -42,6 +42,7 @@ struct Phase2View: View {
     @State private var stabilizer: MetalStabilizer?
     @State private var yoloPreprocessor: YOLOPreprocessor?
     @State private var yoloDetector: YOLODetector?
+    @State private var smoothTracker = SmoothTracker()
     @State private var yoloEnabled: Bool = true
     @State private var yoloPadding: Double = Double(Config.yoloPadding)
 
@@ -399,9 +400,10 @@ struct Phase2View: View {
 
         let detector = YOLODetector(device: device)
         self.yoloDetector = detector
+        let tracker = smoothTracker
         var yoloPreviewFrameCount = 0
         if detector != nil {
-            detector?.onDetection = { [weak debug, weak detector] result in
+            detector?.onDetection = { [weak debug, weak detector, weak tracker] result in
                 DispatchQueue.main.async {
                     debug?.yoloDetected = result.detected
                     debug?.yoloConfidence = result.confidence
@@ -418,6 +420,25 @@ struct Phase2View: View {
                     debug?.yoloBoxesInfo = "\(result.innerScreenBoxesCount)/\(result.allBoxesCount)"
                     debug?.yoloTopBoxes = result.topBoxes
                     debug?.yoloBestRank = result.bestBoxRank
+
+                    if let t = tracker {
+                        let track = t.update(
+                            detected: result.detected,
+                            stabCx: result.stabCx,
+                            stabCy: result.stabCy,
+                            stabW: result.stabW,
+                            stabH: result.stabH
+                        )
+                        debug?.trackCx = track.cx
+                        debug?.trackCy = track.cy
+                        debug?.trackCropW = track.cropW
+                        debug?.trackCropH = track.cropH
+                        debug?.trackSmoothCx = track.smoothCx
+                        debug?.trackSmoothCy = track.smoothCy
+                        debug?.trackSmoothW = track.smoothW
+                        debug?.trackSmoothH = track.smoothH
+                        debug?.trackState = track.state
+                    }
 
                     yoloPreviewFrameCount += 1
                     if yoloPreviewFrameCount % 10 == 0,

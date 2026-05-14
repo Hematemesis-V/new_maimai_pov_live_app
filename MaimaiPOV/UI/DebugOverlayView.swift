@@ -99,10 +99,14 @@ struct DebugOverlayView: View {
             Divider().background(Color.white.opacity(0.2)).padding(.vertical, 2)
 
             sectionHeader("TRACK")
-            infoRow("Cx", String(format: "%.1f", debug.trackCx))
-            infoRow("Cy", String(format: "%.1f", debug.trackCy))
-            infoRow("CropH", String(format: "%.1f", debug.trackCropH))
-            infoRow("State", debug.trackState)
+            infoRow("State", debug.trackState,
+                    color: debug.trackState == "tracking" ? .green : .orange)
+            infoRow("Smooth", String(format: "%.0f,%.0f,%.0f,%.0f",
+                debug.trackSmoothCx, debug.trackSmoothCy,
+                debug.trackSmoothW, debug.trackSmoothH))
+            infoRow("Crop", String(format: "%.0f×%.0f @%.0f,%.0f",
+                debug.trackCropW, debug.trackCropH,
+                debug.trackCx, debug.trackCy))
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)

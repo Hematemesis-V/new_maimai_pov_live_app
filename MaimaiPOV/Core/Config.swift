@@ -18,13 +18,13 @@ enum Config {
     static let outputWidth  = 720
     static let outputHeight = 1280
 
-    // Tracking defaults (from Python CFG)
-    static let defaultAlpha: Float = 0.8
-    static let defaultMaxEdgeSpeed: Float = 15.0
-    static let defaultDeadzone: Float = 8.0
-    static let defaultInnerScreenRatio: Float = 0.5
+    // Tracking defaults
+    static let defaultAlpha: Float = 0.1
+    static let defaultMaxSpeed: Float = 5.0
+    static let defaultDeadZone: Float = 8.0
+    static let defaultTargetRatio: Float = 0.5
     static let defaultRecenterDecay: Float = 0.02
-    static let defaultRecenterGraceSec: Double = 0.5
+    static let defaultRecenterGrace: Double = 0.5
     static let defaultConfidenceThreshold: Float = 0.8
 
     // Stabilizer defaults

@@ -30,7 +30,12 @@ class DebugInfoManager: ObservableObject {
 
     @Published var trackCx: Float = 0
     @Published var trackCy: Float = 0
+    @Published var trackCropW: Float = 0
     @Published var trackCropH: Float = 0
+    @Published var trackSmoothCx: Float = 0
+    @Published var trackSmoothCy: Float = 0
+    @Published var trackSmoothW: Float = 0
+    @Published var trackSmoothH: Float = 0
     @Published var trackState: String = "idle"
 
     @Published var logMessages: [String] = []

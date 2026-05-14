@@ -2,6 +2,7 @@ import SwiftUI
 import HaishinKit
 import CoreMedia
 import VideoToolbox
+import AVFAudio
 
 enum StreamResolution: String, CaseIterable {
     case r720p = "720p"
@@ -20,6 +21,7 @@ class RTMPStreamManager: ObservableObject {
     @Published var streamStatus: String = "Idle"
     @Published var streamResolution: StreamResolution = .r720p
     @Published var videoBitrate: Int = Config.videoBitrate / 1000
+    @Published var audioDelayMs: Double = 0.0
 
     private var connection: RTMPConnection?
     private var stream: RTMPStream?
@@ -31,7 +33,7 @@ class RTMPStreamManager: ObservableObject {
     private var videoIngestTask: Task<Void, Never>?
     private var audioIngestTask: Task<Void, Never>?
     private var videoContinuation: AsyncStream<CMSampleBuffer>.Continuation?
-    private var audioContinuation: AsyncStream<CMSampleBuffer>.Continuation?
+    private var audioContinuation: AsyncStream<(AVAudioBuffer, AVAudioTime)>.Continuation?
 
     private var videoFormatDescription: CMVideoFormatDescription?
     private let lock = NSLock()
@@ -73,12 +75,12 @@ class RTMPStreamManager: ObservableObject {
             }
         }
 
-        let aStream = AsyncStream<CMSampleBuffer> { continuation in
+        let aStream = AsyncStream<(AVAudioBuffer, AVAudioTime)> { continuation in
             self.audioContinuation = continuation
         }
         audioIngestTask = Task { [weak stream] in
-            for await buffer in aStream {
-                await stream?.append(buffer)
+            for await (buffer, when) in aStream {
+                await stream?.append(buffer, when: when)
             }
         }
 
@@ -222,7 +224,52 @@ class RTMPStreamManager: ObservableObject {
 
     func appendAudio(sampleBuffer: CMSampleBuffer) {
         guard isStreaming else { return }
-        audioContinuation?.yield(sampleBuffer)
+
+        guard let formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer),
+              let audioFormat = AVAudioFormat(cmAudioFormatDescription: formatDescription) else { return }
+
+        let frameCount = AVAudioFrameCount(sampleBuffer.numSamples)
+        guard let pcmBuffer = AVAudioPCMBuffer(pcmFormat: audioFormat, frameCount: frameCount) else { return }
+
+        var audioBufferList = AudioBufferList()
+        var blockBuffer: CMBlockBuffer?
+        let status = CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(
+            sampleBuffer,
+            bufferListSizeNeededOut: nil,
+            bufferListOut: &audioBufferList,
+            bufferListSize: MemoryLayout<AudioBufferList>.size,
+            blockBufferAllocator: nil,
+            blockBufferMemoryAllocator: nil,
+            flags: kCMSampleBufferFlag_AudioBufferList_Assure16ByteAlignment,
+            blockBufferOut: &blockBuffer
+        )
+        guard status == noErr else { return }
+
+        let numChannels = Int(audioFormat.channelCount)
+        let srcBuffer = audioBufferList.mBuffers
+        guard let srcData = srcBuffer.mData else { return }
+
+        for ch in 0..<numChannels {
+            guard let dst = pcmBuffer.floatChannelData?[ch] else { continue }
+            let src = srcData.assumingMemoryBound(to: Float.self).advanced(by: ch)
+            for i in 0..<Int(frameCount) {
+                dst[i] = src.advanced(by: numChannels * i).pointee
+            }
+        }
+        pcmBuffer.frameLength = frameCount
+
+        var audioTime = AVAudioTime(sampleBuffer: sampleBuffer)
+
+        let delayMs = audioDelayMs
+        if delayMs != 0 {
+            let delayNanos = UInt64(delayMs * 1_000_000)
+            if let hostTime = audioTime.hostTime {
+                let adjustedHostTime = hostTime + delayNanos
+                audioTime = AVAudioTime(hostTime: adjustedHostTime, sampleRate: audioTime.sampleRate)
+            }
+        }
+
+        audioContinuation?.yield((pcmBuffer, audioTime))
     }
 
     @MainActor

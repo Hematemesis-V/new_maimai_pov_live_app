@@ -513,7 +513,7 @@ struct Phase2View: View {
                             stabW: result.stabW,
                             stabH: result.stabH
                         )
-                        self?.latestTrackOutput = track
+                        self.latestTrackOutput = track
                         debug?.trackCx = track.cx
                         debug?.trackCy = track.cy
                         debug?.trackCropW = track.cropW

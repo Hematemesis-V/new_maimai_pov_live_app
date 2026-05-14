@@ -89,6 +89,7 @@ class LivePipelineManager: ObservableObject {
         let stab = MetalStabilizer(device: device, lensConfig: lensCfg)
         stab?.stabilizerEnabled = stabEnabled
         stab?.fov = fov
+        stab?.useRollingShutter = true
         self.stabilizer = stab
 
         debug.fov = fov
@@ -344,5 +345,9 @@ class LivePipelineManager: ObservableObject {
     @MainActor func updateTrackTargetRatio() {
         smoothTracker.targetRatio = Float(trackTargetRatio)
         debug.trackTargetRatio = Float(trackTargetRatio)
+    }
+
+    @MainActor func updateReadoutTime() {
+        stabilizer?.useRollingShutter = readoutTimeMs > 0
     }
 }

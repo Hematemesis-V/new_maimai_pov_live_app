@@ -40,7 +40,7 @@ struct StabilizerUniforms {
         qAnchor = simd_float4(0, 0, 0, 1)
         fovRadHalf = 100.0 * .pi / 360.0
         distRatio = 0
-        useRollingShutter = 0
+        useRollingShutter = 1
         R_view = matrix_identity_float4x4
         fx = 637.965; fy = 637.533
         cx = 720; cy = 960

@@ -27,7 +27,10 @@ struct Phase2View: View {
         .onChange(of: pipeline.shutterTimescale) { _ in pipeline.applyExposure() }
         .onChange(of: pipeline.isoValue) { _ in pipeline.applyExposure() }
         .onChange(of: pipeline.syncOffsetMs) { Config.syncOffsetMs = $0 }
-        .onChange(of: pipeline.readoutTimeMs) { Config.readoutTimeMs = $0 }
+        .onChange(of: pipeline.readoutTimeMs) {
+            Config.readoutTimeMs = $0
+            pipeline.updateReadoutTime()
+        }
         .onChange(of: pipeline.audioDelayMs) {
             pipeline.camera.audioDelayMs = $0
             pipeline.streamManager.audioDelayMs = $0

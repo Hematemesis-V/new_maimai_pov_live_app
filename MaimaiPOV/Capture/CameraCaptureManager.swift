@@ -344,7 +344,7 @@ extension CameraCaptureManager: AVCaptureVideoDataOutputSampleBufferDelegate,
         guard let masterClock else { return }
 
         let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-        let hostTime = CMSyncConvertTime(pts, ofSourceClock: masterClock, toDestinationClock: hostClock)
+        let hostTime = CMSyncConvertTime(pts, from: masterClock, to: hostClock)
         let alignedTime = CMTimeGetSeconds(hostTime)
 
         onAudioSample?(sampleBuffer, alignedTime)

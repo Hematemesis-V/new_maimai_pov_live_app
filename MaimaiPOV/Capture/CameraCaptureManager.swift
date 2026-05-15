@@ -24,11 +24,9 @@ class CameraCaptureManager: NSObject, ObservableObject {
 
     private var videoClockOffset: Double?
     private var audioClockOffset: Double?
-    private var videoOffsetCalibMin: Double = .greatestFiniteMagnitude
-    private var audioOffsetCalibMin: Double = .greatestFiniteMagnitude
-    private var videoCalibCount: Int = 0
-    private var audioCalibCount: Int = 0
-    private let calibFrames = 120
+    private var videoOffsetBuffer: [Double] = []
+    private var audioOffsetBuffer: [Double] = []
+    private let offsetWindowSize = 600
 
     var videoClockOffsetMs: Double? {
         videoClockOffset.map { $0 * 1000.0 }
@@ -79,10 +77,8 @@ class CameraCaptureManager: NSObject, ObservableObject {
             self.configureSession(for: lens)
             self.videoClockOffset = nil
             self.audioClockOffset = nil
-            self.videoCalibCount = 0
-            self.audioCalibCount = 0
-            self.videoOffsetCalibMin = .greatestFiniteMagnitude
-            self.audioOffsetCalibMin = .greatestFiniteMagnitude
+            self.videoOffsetBuffer.removeAll()
+            self.audioOffsetBuffer.removeAll()
             DispatchQueue.main.async { self.activeLens = lens }
         }
     }
@@ -349,15 +345,12 @@ extension CameraCaptureManager: AVCaptureVideoDataOutputSampleBufferDelegate,
         let systemTime = ProcessInfo.processInfo.systemUptime
         let currentOffset = systemTime - frameTime
 
-        if videoClockOffset == nil {
-            videoClockOffset = currentOffset
-            videoOffsetCalibMin = currentOffset
-            videoCalibCount = 1
-        } else if videoCalibCount < calibFrames {
-            videoCalibCount += 1
-            videoOffsetCalibMin = min(videoOffsetCalibMin, currentOffset)
-            videoClockOffset = videoOffsetCalibMin
+        videoOffsetBuffer.append(currentOffset)
+        if videoOffsetBuffer.count > offsetWindowSize {
+            videoOffsetBuffer.removeFirst(videoOffsetBuffer.count - offsetWindowSize)
         }
+
+        videoClockOffset = videoOffsetBuffer.min()!
 
         let alignedTime = frameTime + videoClockOffset!
         onVideoFrame?(pixelBuffer, alignedTime)
@@ -369,15 +362,12 @@ extension CameraCaptureManager: AVCaptureVideoDataOutputSampleBufferDelegate,
         let systemTime = ProcessInfo.processInfo.systemUptime
         let currentOffset = systemTime - audioTime
 
-        if audioClockOffset == nil {
-            audioClockOffset = currentOffset
-            audioOffsetCalibMin = currentOffset
-            audioCalibCount = 1
-        } else if audioCalibCount < calibFrames {
-            audioCalibCount += 1
-            audioOffsetCalibMin = min(audioOffsetCalibMin, currentOffset)
-            audioClockOffset = audioOffsetCalibMin
+        audioOffsetBuffer.append(currentOffset)
+        if audioOffsetBuffer.count > offsetWindowSize {
+            audioOffsetBuffer.removeFirst(audioOffsetBuffer.count - offsetWindowSize)
         }
+
+        audioClockOffset = audioOffsetBuffer.min()!
 
         let alignedTime = audioTime + audioClockOffset!
         onAudioSample?(sampleBuffer, alignedTime)

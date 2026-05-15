@@ -76,6 +76,8 @@ class LivePipelineManager: ObservableObject {
     private var streamFrameCount: Int = 0
     private var fpsTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
+    private var lastClockOffsetMs: Double = 0
+    private var lastOffsetUpdateTime: Date = Date()
 
     init() {
         camera.objectWillChange.sink { [weak self] _ in
@@ -287,6 +289,14 @@ class LivePipelineManager: ObservableObject {
                     self.debug.streamInfo = "\(streamCount) bufs/s 720x1280"
                     if let offset = self.camera.videoClockOffsetMs {
                         self.debug.clockOffsetMs = offset
+                        let now = Date()
+                        let elapsed = now.timeIntervalSince(self.lastOffsetUpdateTime)
+                        if elapsed >= 2.0 {
+                            let driftRateMsPerS = (offset - self.lastClockOffsetMs) / (elapsed * 1000.0)
+                            self.debug.clockDriftRateMsPerS = driftRateMsPerS
+                            self.lastClockOffsetMs = offset
+                            self.lastOffsetUpdateTime = now
+                        }
                     }
                 }
             }

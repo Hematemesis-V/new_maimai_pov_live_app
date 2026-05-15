@@ -31,7 +31,8 @@ class IOSurfaceOutputPool {
             )
             guard result == kCVReturnSuccess, let pb = pixelBuffer else { continue }
 
-            guard let ioSurface = CVPixelBufferGetIOSurface(pb) else { continue }
+            guard let unmanagedSurface = CVPixelBufferGetIOSurface(pb) else { continue }
+            let ioSurface = unmanagedSurface.takeUnretainedValue()
 
             let texDesc = MTLTextureDescriptor.texture2DDescriptor(
                 pixelFormat: .bgra8Unorm,

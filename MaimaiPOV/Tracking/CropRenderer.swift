@@ -44,6 +44,11 @@ class CropRenderer {
     }
 
     func process(stabTexture: MTLTexture, cx: Float, cy: Float, cropW: Float, cropH: Float) {
+        process(stabTexture: stabTexture, cx: cx, cy: cy, cropW: cropW, cropH: cropH, outputTexture: outputTexture, completion: {})
+    }
+
+    func process(stabTexture: MTLTexture, cx: Float, cy: Float, cropW: Float, cropH: Float,
+                 outputTexture: MTLTexture, completion: @escaping () -> Void) {
         let halfW = cropW / 2.0
         let halfH = cropH / 2.0
 
@@ -80,6 +85,9 @@ class CropRenderer {
         encoder.dispatchThreads(gridSize, threadsPerThreadgroup: tgSize)
         encoder.endEncoding()
 
+        cmdBuf.addCompletedHandler { _ in
+            completion()
+        }
         cmdBuf.commit()
     }
 

@@ -55,17 +55,23 @@ class LivePipelineManager: ObservableObject {
     var onAudioSampleAvailable: ((CMSampleBuffer, Double) -> Void)?
 
     var previewTexture: MTLTexture? {
-        if let cr = cropRenderer {
-            return cr.outputTexture
+        if previewEnabled {
+            if let pool = ioSurfacePool, let buf = pool.lastCompletedBuffer {
+                return buf.texture
+            }
+            if let cr = cropRenderer {
+                return cr.outputTexture
+            }
+            return stabilizer?.outputTexture
         }
-        return stabilizer?.outputTexture
+        return nil
     }
 
     var isCropActive: Bool { cropRenderer != nil }
 
     let pipelineQueue = DispatchQueue(label: "com.maimai.pipeline", qos: .userInteractive)
 
-    private var textureReadback: TextureReadback?
+    private var ioSurfacePool: IOSurfaceOutputPool?
     private var frameCount: Int = 0
     private var streamFrameCount: Int = 0
     private var fpsTimer: Timer?
@@ -102,9 +108,11 @@ class LivePipelineManager: ObservableObject {
         let cropR = CropRenderer(device: device)
         self.cropRenderer = cropR
 
-        textureReadback = TextureReadback(device: device,
-                                           width: Config.outputWidth,
-                                           height: Config.outputHeight)
+        ioSurfacePool = IOSurfaceOutputPool(
+            device: device,
+            width: Config.outputWidth,
+            height: Config.outputHeight
+        )
 
         trackAlpha = Double(smoothTracker.alpha)
         trackMaxSpeed = Double(smoothTracker.maxSpeed)
@@ -199,7 +207,31 @@ class LivePipelineManager: ObservableObject {
                     detector.enqueue(stabTexture: stab.outputTexture)
                 }
 
-                if let cr = self.cropRenderer {
+                if let pool = self.ioSurfacePool,
+                   let cr = self.cropRenderer,
+                   let writeBuffer = pool.nextWriteBuffer() {
+                    let timestamp = CMTime(seconds: alignedTime, preferredTimescale: 1000000000)
+                    let track = self.latestTrackOutput ?? cr.makeFallbackTrack()
+                    cr.process(
+                        stabTexture: stab.outputTexture,
+                        cx: track.cx, cy: track.cy,
+                        cropW: track.cropW, cropH: track.cropH,
+                        outputTexture: writeBuffer.texture
+                    ) { [weak self] in
+                        self?.pipelineQueue.async {
+                            guard let self = self else { return }
+                            self.streamFrameCount += 1
+                            let pipelineLatencyMs = (CACurrentMediaTime() - pipelineEnterTime) * 1000.0
+                            self.onStreamBufferAvailable?(writeBuffer.pixelBuffer, timestamp)
+                            self.streamManager.appendVideo(pixelBuffer: writeBuffer.pixelBuffer, timestamp: timestamp)
+                            DispatchQueue.main.async {
+                                self.lagMs = pipelineLatencyMs
+                                self.debug.pipelineLagMs = pipelineLatencyMs
+                                self.debug.audioQueueDepth = self.streamManager.audioSyncQueueDepth
+                            }
+                        }
+                    }
+                } else if let cr = self.cropRenderer {
                     if let track = self.latestTrackOutput {
                         cr.process(stabTexture: stab.outputTexture,
                                    cx: track.cx, cy: track.cy,
@@ -209,24 +241,6 @@ class LivePipelineManager: ObservableObject {
                         cr.process(stabTexture: stab.outputTexture,
                                    cx: fb.cx, cy: fb.cy,
                                    cropW: fb.cropW, cropH: fb.cropH)
-                    }
-                }
-
-                if let readback = self.textureReadback, let cr = self.cropRenderer {
-                    let timestamp = CMTime(seconds: alignedTime, preferredTimescale: 1000000000)
-                    readback.readAsync(from: cr.outputTexture) { [weak self] pixelBuffer in
-                        self?.pipelineQueue.async {
-                            guard let self = self else { return }
-                            self.streamFrameCount += 1
-                            let pipelineLatencyMs = (CACurrentMediaTime() - pipelineEnterTime) * 1000.0
-                            self.onStreamBufferAvailable?(pixelBuffer, timestamp)
-                            self.streamManager.appendVideo(pixelBuffer: pixelBuffer, timestamp: timestamp)
-                            DispatchQueue.main.async {
-                                self.lagMs = pipelineLatencyMs
-                                self.debug.pipelineLagMs = pipelineLatencyMs
-                                self.debug.audioQueueDepth = self.streamManager.audioSyncQueueDepth
-                            }
-                        }
                     }
                 }
             }

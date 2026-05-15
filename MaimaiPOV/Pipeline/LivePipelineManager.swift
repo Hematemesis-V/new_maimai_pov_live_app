@@ -18,7 +18,6 @@ class LivePipelineManager: ObservableObject {
 
     @Published var syncOffsetMs: Double = Config.syncOffsetMs
     @Published var readoutTimeMs: Double = Config.readoutTimeMs
-    @Published var audioDelayMs: Double = Config.audioDelayMs
 
     @Published var fov: Float = 100.0
     @Published var distRatio: Float = 0.0
@@ -179,6 +178,7 @@ class LivePipelineManager: ObservableObject {
         MotionManager.shared.startUpdates()
 
         camera.onVideoFrame = { [weak self] pixelBuffer, alignedTime in
+            let pipelineEnterTime = CACurrentMediaTime()
             self?.pipelineQueue.async {
                 guard let self = self else { return }
                 self.frameCount += 1
@@ -192,9 +192,7 @@ class LivePipelineManager: ObservableObject {
                       let qTop    = MotionManager.shared.getQuaternion(at: topTime),
                       let qBottom = MotionManager.shared.getQuaternion(at: bottomTime) else { return }
 
-                let start = CACurrentMediaTime()
                 stab.process(pixelBuffer: pixelBuffer, qCenter: qCenter, qTop: qTop, qBottom: qBottom)
-                let elapsed = CACurrentMediaTime() - start
 
                 if self.yoloEnabled, let detector = self.yoloDetector {
                     detector.enqueue(stabTexture: stab.outputTexture)
@@ -219,15 +217,16 @@ class LivePipelineManager: ObservableObject {
                         self?.pipelineQueue.async {
                             guard let self = self else { return }
                             self.streamFrameCount += 1
+                            let pipelineLatencyMs = (CACurrentMediaTime() - pipelineEnterTime) * 1000.0
                             self.onStreamBufferAvailable?(pixelBuffer, timestamp)
                             self.streamManager.appendVideo(pixelBuffer: pixelBuffer, timestamp: timestamp)
+                            DispatchQueue.main.async {
+                                self.lagMs = pipelineLatencyMs
+                                self.debug.pipelineLagMs = pipelineLatencyMs
+                                self.debug.audioQueueDepth = self.streamManager.audioSyncQueueDepth
+                            }
                         }
                     }
-                }
-
-                DispatchQueue.main.async {
-                    self.lagMs = elapsed * 1000.0
-                    self.debug.stabLagMs = elapsed * 1000.0
                 }
             }
         }

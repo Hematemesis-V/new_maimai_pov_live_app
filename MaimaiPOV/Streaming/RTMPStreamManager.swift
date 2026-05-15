@@ -21,22 +21,21 @@ class RTMPStreamManager: ObservableObject {
     @Published var streamStatus: String = "Idle"
     @Published var streamResolution: StreamResolution = .r720p
     @Published var videoBitrate: Int = Config.videoBitrate / 1000
-    private let audioDelayLock = NSLock()
-    private var _audioDelayMs: Double = Config.audioDelayMs
-    var audioDelayMs: Double {
-        get {
-            audioDelayLock.lock()
-            defer { audioDelayLock.unlock() }
-            return _audioDelayMs
-        }
-        set {
-            audioDelayLock.lock()
-            _audioDelayMs = newValue
-            audioDelayLock.unlock()
-            DispatchQueue.main.async { [weak self] in
-                self?.objectWillChange.send()
-            }
-        }
+
+    private struct AudioSyncEntry {
+        let pcmBuffer: AVAudioPCMBuffer
+        let audioTime: AVAudioTime
+        let alignedTime: Double
+    }
+
+    private var audioSyncQueue: [AudioSyncEntry] = []
+    private let audioSyncLock = NSLock()
+    private let audioQueueMaxDuration: Double = 0.2
+
+    var audioSyncQueueDepth: Int {
+        audioSyncLock.lock()
+        defer { audioSyncLock.unlock() }
+        return audioSyncQueue.count
     }
 
     private var connection: RTMPConnection?
@@ -281,6 +280,20 @@ class RTMPStreamManager: ObservableObject {
             return
         }
 
+        let videoTimeSeconds = timestamp.seconds
+        audioSyncLock.lock()
+        var audioToRelease: [(AVAudioPCMBuffer, AVAudioTime)] = []
+        while !audioSyncQueue.isEmpty, audioSyncQueue.first!.alignedTime <= videoTimeSeconds {
+            let entry = audioSyncQueue.removeFirst()
+            audioToRelease.append((entry.pcmBuffer, entry.audioTime))
+        }
+        audioSyncLock.unlock()
+
+        for (buffer, time) in audioToRelease {
+            decrementAudioBufferCount()
+            audioContinuation?.yield((buffer, time))
+        }
+
         videoContinuation?.yield(finalSampleBuffer)
     }
 
@@ -303,20 +316,17 @@ class RTMPStreamManager: ObservableObject {
         guard copyStatus == noErr else { return }
 
         let sampleTime = AVAudioFramePosition(alignedTime * audioFormat.sampleRate)
-        var audioTime = AVAudioTime(sampleTime: sampleTime, atRate: audioFormat.sampleRate)
+        let audioTime = AVAudioTime(sampleTime: sampleTime, atRate: audioFormat.sampleRate)
 
-        let delayMs: Double = {
-            audioDelayLock.lock()
-            defer { audioDelayLock.unlock() }
-            return _audioDelayMs
-        }()
-        if delayMs != 0 {
-            let delaySeconds = delayMs / 1000.0
-            let adjustedSampleTime = sampleTime + AVAudioFramePosition(delaySeconds * audioFormat.sampleRate)
-            audioTime = AVAudioTime(sampleTime: adjustedSampleTime, atRate: audioFormat.sampleRate)
+        audioSyncLock.lock()
+        audioSyncQueue.append(AudioSyncEntry(
+            pcmBuffer: pcmBuffer, audioTime: audioTime, alignedTime: alignedTime
+        ))
+        while audioSyncQueue.count > 1,
+              audioSyncQueue.last!.alignedTime - audioSyncQueue.first!.alignedTime > audioQueueMaxDuration {
+            audioSyncQueue.removeFirst()
         }
-
-        audioContinuation?.yield((pcmBuffer, audioTime))
+        audioSyncLock.unlock()
     }
 
     @MainActor
@@ -405,6 +415,9 @@ class RTMPStreamManager: ObservableObject {
         videoBufferCount = 0
         audioBufferCount = 0
         bufferCountLock.unlock()
+        audioSyncLock.lock()
+        audioSyncQueue.removeAll()
+        audioSyncLock.unlock()
         videoContinuation?.finish()
         audioContinuation?.finish()
         lock.lock()
@@ -430,6 +443,9 @@ class RTMPStreamManager: ObservableObject {
         audioContinuation?.finish(); audioContinuation = nil
         videoIngestTask?.cancel(); videoIngestTask = nil
         audioIngestTask?.cancel(); audioIngestTask = nil
+        audioSyncLock.lock()
+        audioSyncQueue.removeAll()
+        audioSyncLock.unlock()
         lock.lock()
         let oldStream = stream
         let oldConnection = connection

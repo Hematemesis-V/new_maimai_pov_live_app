@@ -31,10 +31,6 @@ struct Phase2View: View {
             Config.readoutTimeMs = $0
             pipeline.updateReadoutTime()
         }
-        .onChange(of: pipeline.audioDelayMs) {
-            Config.audioDelayMs = $0
-            pipeline.streamManager.audioDelayMs = $0
-        }
         .onChange(of: pipeline.stabEnabled) { _ in pipeline.updateStabilizerEnabled() }
         .onChange(of: pipeline.fov) { _ in pipeline.updateFov() }
         .onChange(of: pipeline.distRatio) { _ in pipeline.updateDistRatio() }
@@ -141,7 +137,6 @@ struct Phase2View: View {
                         distRatioRow
                         yawPitchRollRow
                         syncRow
-                        audioDelayRow
                         yoloToggleRow
                         yoloPaddingRow
                         trackingSectionHeader
@@ -288,14 +283,6 @@ struct Phase2View: View {
             } valueLabel: {
                 Text(String(format: "%.1f", pipeline.readoutTimeMs)).font(.caption).foregroundColor(.gray).frame(width: 40, alignment: .trailing)
             }
-        }
-    }
-
-    private var audioDelayRow: some View {
-        labeledRow("AudioDel") {
-            Slider(value: $pipeline.audioDelayMs, in: -200...200)
-        } valueLabel: {
-            Text("\(Int(pipeline.audioDelayMs))ms").font(.caption).foregroundColor(.gray).frame(width: 40, alignment: .trailing)
         }
     }
 

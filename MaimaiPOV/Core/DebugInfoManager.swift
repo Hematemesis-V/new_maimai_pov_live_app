@@ -5,7 +5,8 @@ class DebugInfoManager: ObservableObject {
     static let shared = DebugInfoManager()
 
     @Published var fps: Double = 0
-    @Published var stabLagMs: Double = 0
+    @Published var pipelineLagMs: Double = 0
+    @Published var audioQueueDepth: Int = 0
     @Published var yoloLagMs: Double = 0
     @Published var frameCount: Int = 0
 

@@ -72,7 +72,7 @@ struct DebugOverlayView: View {
     private var infoContent: some View {
         VStack(alignment: .leading, spacing: 2) {
             sectionHeader("STAB")
-            infoRow("Lag", String(format: "%.1fms", debug.stabLagMs))
+            infoRow("Lag", String(format: "%.1fms", debug.pipelineLagMs))
             infoRow("FOV", String(format: "%.0f°", debug.fov))
             infoRow("Dist", String(format: "%.2f", debug.distRatio))
             infoRow("Lens", debug.lensType)
@@ -117,6 +117,7 @@ struct DebugOverlayView: View {
             sectionHeader("STREAM")
             infoRow("Readback", debug.streamInfo,
                     color: debug.streamInfo != "--" ? .green : .gray)
+            infoRow("AQueue", "\(debug.audioQueueDepth) bufs")
 
             Divider().background(Color.white.opacity(0.2)).padding(.vertical, 2)
 

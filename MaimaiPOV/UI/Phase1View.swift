@@ -14,7 +14,6 @@ struct Phase1View: View {
     @State private var selectedLens: LensType = .main
     @State private var syncOffsetMs: Double = Config.syncOffsetMs
     @State private var readoutTimeMs: Double = Config.readoutTimeMs
-    @State private var audioDelayMs: Double = Config.audioDelayMs
 
     @State private var frameCount: Int = 0
     @State private var currentFPS: Double = 0
@@ -31,7 +30,6 @@ struct Phase1View: View {
             isoSlider
             syncOffsetSlider
             readoutSlider
-            audioDelaySlider
             imuStatus
             actionButtons
         }
@@ -47,7 +45,6 @@ struct Phase1View: View {
         .onChange(of: isoValue) { applyExposure() }
         .onChange(of: syncOffsetMs) { newVal in Config.syncOffsetMs = newVal }
         .onChange(of: readoutTimeMs) { newVal in Config.readoutTimeMs = newVal }
-        .onChange(of: audioDelayMs) { Config.audioDelayMs = $0 }
         .onReceive(fpsTimer) { _ in
             currentFPS = Double(frameCount)
             frameCount = 0
@@ -154,10 +151,6 @@ struct Phase1View: View {
 
     private var readoutSlider: some View {
         labeledSlider("Readout Time (ms)", value: $readoutTimeMs, range: 5...15, format: "%.2f")
-    }
-
-    private var audioDelaySlider: some View {
-        labeledSlider("Audio Delay (ms)", value: $audioDelayMs, range: -200...200, format: "%.0f")
     }
 
     private var imuStatus: some View {

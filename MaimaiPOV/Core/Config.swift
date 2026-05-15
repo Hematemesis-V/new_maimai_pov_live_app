@@ -63,23 +63,12 @@ enum Config {
         }
         set { UserDefaults.standard.set(newValue, forKey: readoutTimeKey) }
     }
-    static var audioDelayMs: Double {
-        get {
-            guard UserDefaults.standard.object(forKey: audioDelayKey) != nil else {
-                return defaultAudioDelayMs
-            }
-            return UserDefaults.standard.double(forKey: audioDelayKey)
-        }
-        set { UserDefaults.standard.set(newValue, forKey: audioDelayKey) }
-    }
     static let defaultSyncOffsetMs: Double = -25.0
     static let defaultReadoutTimeMs: Double = 9.18
-    static let defaultAudioDelayMs: Double = 0.0
     private static let syncOffsetKey = "com.maimai.syncOffsetMs"
     private static let readoutTimeKey = "com.maimai.readoutTimeMs"
     private static let yoloPaddingKey = "com.maimai.yoloPadding"
     private static let yoloPreviewEnabledKey = "com.maimai.yoloPreviewEnabled"
-    private static let audioDelayKey = "com.maimai.audioDelayMs"
 
     // Video encoding
     static let videoBitrate: Int = 4_000_000

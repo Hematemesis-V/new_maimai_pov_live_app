@@ -292,7 +292,7 @@ class LivePipelineManager: ObservableObject {
                         let now = Date()
                         let elapsed = now.timeIntervalSince(self.lastOffsetUpdateTime)
                         if elapsed >= 2.0 {
-                            let driftRateMsPerS = (offset - self.lastClockOffsetMs) / (elapsed * 1000.0)
+                            let driftRateMsPerS = (offset - self.lastClockOffsetMs) / elapsed
                             self.debug.clockDriftRateMsPerS = driftRateMsPerS
                             self.lastClockOffsetMs = offset
                             self.lastOffsetUpdateTime = now

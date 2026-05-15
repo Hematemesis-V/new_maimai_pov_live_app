@@ -26,7 +26,7 @@ class CameraCaptureManager: NSObject, ObservableObject {
     private var audioClockOffset: Double?
     private var videoOffsetBuffer: [Double] = []
     private var audioOffsetBuffer: [Double] = []
-    private let offsetWindowSize = 600
+    private let offsetWindowSize = 120
 
     var videoClockOffsetMs: Double? {
         videoClockOffset.map { $0 * 1000.0 }

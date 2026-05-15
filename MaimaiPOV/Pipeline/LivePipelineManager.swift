@@ -285,6 +285,9 @@ class LivePipelineManager: ObservableObject {
                     self.debug.fps = Double(count)
                     self.debug.frameCount = count
                     self.debug.streamInfo = "\(streamCount) bufs/s 720x1280"
+                    if let offset = self.camera.videoClockOffsetMs {
+                        self.debug.clockOffsetMs = offset
+                    }
                 }
             }
         }

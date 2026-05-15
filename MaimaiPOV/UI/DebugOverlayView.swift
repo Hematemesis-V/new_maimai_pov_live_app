@@ -73,6 +73,7 @@ struct DebugOverlayView: View {
         VStack(alignment: .leading, spacing: 2) {
             sectionHeader("STAB")
             infoRow("Lag", String(format: "%.1fms", debug.pipelineLagMs))
+            infoRow("ClkOff", String(format: "%.2fms", debug.clockOffsetMs))
             infoRow("FOV", String(format: "%.0f°", debug.fov))
             infoRow("Dist", String(format: "%.2f", debug.distRatio))
             infoRow("Lens", debug.lensType)

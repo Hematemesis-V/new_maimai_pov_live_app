@@ -9,6 +9,7 @@ class DebugInfoManager: ObservableObject {
     @Published var audioQueueDepth: Int = 0
     @Published var yoloLagMs: Double = 0
     @Published var frameCount: Int = 0
+    @Published var clockOffsetMs: Double = 0
 
     @Published var fov: Float = 0
     @Published var distRatio: Float = 0

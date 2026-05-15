@@ -22,10 +22,17 @@ class CameraCaptureManager: NSObject, ObservableObject {
     var onVideoFrame: ((CVPixelBuffer, Double) -> Void)?
     var onAudioSample: ((CMSampleBuffer, Double) -> Void)?
 
-    // Clock alignment: both camera and audio PTS use hostTime, but may drift.
-    // We track individual offsets so audio delay can be adjusted independently.
     private var videoClockOffset: Double?
     private var audioClockOffset: Double?
+    private var videoOffsetCalibMin: Double = .greatestFiniteMagnitude
+    private var audioOffsetCalibMin: Double = .greatestFiniteMagnitude
+    private var videoCalibCount: Int = 0
+    private var audioCalibCount: Int = 0
+    private let calibFrames = 120
+
+    var videoClockOffsetMs: Double? {
+        videoClockOffset.map { $0 * 1000.0 }
+    }
 
     func checkPermissionAndStart() {
         let videoStatus = AVCaptureDevice.authorizationStatus(for: .video)
@@ -70,6 +77,12 @@ class CameraCaptureManager: NSObject, ObservableObject {
         sessionQueue.async { [weak self] in
             guard let self else { return }
             self.configureSession(for: lens)
+            self.videoClockOffset = nil
+            self.audioClockOffset = nil
+            self.videoCalibCount = 0
+            self.audioCalibCount = 0
+            self.videoOffsetCalibMin = .greatestFiniteMagnitude
+            self.audioOffsetCalibMin = .greatestFiniteMagnitude
             DispatchQueue.main.async { self.activeLens = lens }
         }
     }
@@ -334,14 +347,19 @@ extension CameraCaptureManager: AVCaptureVideoDataOutputSampleBufferDelegate,
         let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
         let frameTime = CMTimeGetSeconds(pts)
         let systemTime = ProcessInfo.processInfo.systemUptime
+        let currentOffset = systemTime - frameTime
 
         if videoClockOffset == nil {
-            videoClockOffset = systemTime - frameTime
-        } else {
-            videoClockOffset = videoClockOffset! * 0.99 + (systemTime - frameTime) * 0.01
+            videoClockOffset = currentOffset
+            videoOffsetCalibMin = currentOffset
+            videoCalibCount = 1
+        } else if videoCalibCount < calibFrames {
+            videoCalibCount += 1
+            videoOffsetCalibMin = min(videoOffsetCalibMin, currentOffset)
+            videoClockOffset = videoOffsetCalibMin
         }
-        let alignedTime = frameTime + videoClockOffset!
 
+        let alignedTime = frameTime + videoClockOffset!
         onVideoFrame?(pixelBuffer, alignedTime)
     }
 
@@ -349,11 +367,16 @@ extension CameraCaptureManager: AVCaptureVideoDataOutputSampleBufferDelegate,
         let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
         let audioTime = CMTimeGetSeconds(pts)
         let systemTime = ProcessInfo.processInfo.systemUptime
+        let currentOffset = systemTime - audioTime
 
         if audioClockOffset == nil {
-            audioClockOffset = systemTime - audioTime
-        } else {
-            audioClockOffset = audioClockOffset! * 0.99 + (systemTime - audioTime) * 0.01
+            audioClockOffset = currentOffset
+            audioOffsetCalibMin = currentOffset
+            audioCalibCount = 1
+        } else if audioCalibCount < calibFrames {
+            audioCalibCount += 1
+            audioOffsetCalibMin = min(audioOffsetCalibMin, currentOffset)
+            audioClockOffset = audioOffsetCalibMin
         }
 
         let alignedTime = audioTime + audioClockOffset!

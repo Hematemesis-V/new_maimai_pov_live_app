@@ -22,15 +22,8 @@ class CameraCaptureManager: NSObject, ObservableObject {
     var onVideoFrame: ((CVPixelBuffer, Double) -> Void)?
     var onAudioSample: ((CMSampleBuffer, Double) -> Void)?
 
-    private var videoClockOffset: Double?
-    private var audioClockOffset: Double?
-    private var videoOffsetBuffer: [Double] = []
-    private var audioOffsetBuffer: [Double] = []
-    private let offsetWindowSize = 120
-
-    var videoClockOffsetMs: Double? {
-        videoClockOffset.map { $0 * 1000.0 }
-    }
+    private var masterClock: CMClock?
+    private let hostClock = CMClockGetHostTimeClock()
 
     func checkPermissionAndStart() {
         let videoStatus = AVCaptureDevice.authorizationStatus(for: .video)
@@ -58,6 +51,7 @@ class CameraCaptureManager: NSObject, ObservableObject {
         sessionQueue.async { [weak self] in
             guard let self, !self.session.isRunning else { return }
             self.session.startRunning()
+            self.masterClock = self.session.masterClock
             DispatchQueue.main.async { self.isRunning = true }
         }
     }
@@ -75,10 +69,7 @@ class CameraCaptureManager: NSObject, ObservableObject {
         sessionQueue.async { [weak self] in
             guard let self else { return }
             self.configureSession(for: lens)
-            self.videoClockOffset = nil
-            self.audioClockOffset = nil
-            self.videoOffsetBuffer.removeAll()
-            self.audioOffsetBuffer.removeAll()
+            self.masterClock = self.session.masterClock
             DispatchQueue.main.async { self.activeLens = lens }
         }
     }
@@ -92,6 +83,7 @@ class CameraCaptureManager: NSObject, ObservableObject {
             self.configureSession(for: self.activeLens)
             self.configureAudioSession()
             self.session.startRunning()
+            self.masterClock = self.session.masterClock
             DispatchQueue.main.async { self.isRunning = true }
         }
     }
@@ -339,37 +331,22 @@ extension CameraCaptureManager: AVCaptureVideoDataOutputSampleBufferDelegate,
 
     private func handleVideoSample(_ sampleBuffer: CMSampleBuffer) {
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        guard let masterClock else { return }
 
         let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-        let frameTime = CMTimeGetSeconds(pts)
-        let systemTime = ProcessInfo.processInfo.systemUptime
-        let currentOffset = systemTime - frameTime
+        let hostTime = CMSyncConvertTime(pts, ofSourceClock: masterClock, toDestinationClock: hostClock)
+        let alignedTime = CMTimeGetSeconds(hostTime)
 
-        videoOffsetBuffer.append(currentOffset)
-        if videoOffsetBuffer.count > offsetWindowSize {
-            videoOffsetBuffer.removeFirst(videoOffsetBuffer.count - offsetWindowSize)
-        }
-
-        videoClockOffset = videoOffsetBuffer.min()!
-
-        let alignedTime = frameTime + videoClockOffset!
         onVideoFrame?(pixelBuffer, alignedTime)
     }
 
     private func handleAudioSample(_ sampleBuffer: CMSampleBuffer) {
+        guard let masterClock else { return }
+
         let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-        let audioTime = CMTimeGetSeconds(pts)
-        let systemTime = ProcessInfo.processInfo.systemUptime
-        let currentOffset = systemTime - audioTime
+        let hostTime = CMSyncConvertTime(pts, ofSourceClock: masterClock, toDestinationClock: hostClock)
+        let alignedTime = CMTimeGetSeconds(hostTime)
 
-        audioOffsetBuffer.append(currentOffset)
-        if audioOffsetBuffer.count > offsetWindowSize {
-            audioOffsetBuffer.removeFirst(audioOffsetBuffer.count - offsetWindowSize)
-        }
-
-        audioClockOffset = audioOffsetBuffer.min()!
-
-        let alignedTime = audioTime + audioClockOffset!
         onAudioSample?(sampleBuffer, alignedTime)
     }
 }

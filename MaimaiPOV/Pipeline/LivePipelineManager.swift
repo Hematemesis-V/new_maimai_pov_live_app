@@ -93,11 +93,16 @@ class LivePipelineManager: ObservableObject {
     }
 
     @MainActor func start() {
+        // 1. 初始化稳定器，应用所有持久化设置
         let lensCfg = LensCalibration.config(for: selectedLens, inputWidth: Config.inputWidth)
         let stab = MetalStabilizer(device: device, lensConfig: lensCfg)
         stab?.stabilizerEnabled = stabEnabled
         stab?.fov = fov
-        stab?.useRollingShutter = true
+        stab?.distRatio = distRatio
+        stab?.yawDeg = yaw
+        stab?.pitchDeg = pitch
+        stab?.rollDeg = roll
+        stab?.useRollingShutter = readoutTimeMs > 0
         self.stabilizer = stab
 
         debug.fov = fov
@@ -115,10 +120,15 @@ class LivePipelineManager: ObservableObject {
             height: Config.outputHeight
         )
 
-        trackAlpha = Double(smoothTracker.alpha)
-        trackMaxSpeed = Double(smoothTracker.maxSpeed)
-        trackDeadZone = Double(smoothTracker.deadZone)
-        trackTargetRatio = Double(smoothTracker.targetRatio)
+        // 2. 初始化跟踪器，正确应用持久化设置（顺序要对！）
+        smoothTracker.alpha = Float(trackAlpha)
+        smoothTracker.maxSpeed = Float(trackMaxSpeed)
+        smoothTracker.deadZone = Float(trackDeadZone)
+        smoothTracker.targetRatio = Float(trackTargetRatio)
+        debug.trackAlpha = Float(trackAlpha)
+        debug.trackMaxSpeed = Float(trackMaxSpeed)
+        debug.trackDeadZone = Float(trackDeadZone)
+        debug.trackTargetRatio = Float(trackTargetRatio)
 
         let detector = YOLODetector(device: device)
         self.yoloDetector = detector
@@ -183,8 +193,11 @@ class LivePipelineManager: ObservableObject {
         debug.yoloUniforms = String(format: "s%.3f pH%.0f pV%.0f pL%.0f pT%.0f",
             u.scale, u.padH, u.padV, u.padLeft, u.padTop)
 
+        // 3. 初始化相机，应用所有持久化设置
         camera.checkPermissionAndStart()
+        camera.switchLens(to: selectedLens)
         camera.setFocus(Float(focusValue))
+        applyExposure()
         MotionManager.shared.startUpdates()
 
         camera.onVideoFrame = { [weak self] pixelBuffer, alignedTime in

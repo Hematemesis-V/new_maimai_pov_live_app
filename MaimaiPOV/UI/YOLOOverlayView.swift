@@ -19,7 +19,10 @@ struct YOLOOverlayView: View {
             ZStack {
                 if let tex = texture {
                     MetalView(device: device, texture: tex, previewEnabled: true)
-                        .aspectRatio(contentMode: .fit)
+                        .aspectRatio(
+                            CGSize(width: Config.stabWidth, height: Config.stabHeight),
+                            contentMode: .fit
+                        )
                         .overlay(
                             Canvas { context, size in
                                 drawBoundingBox(context: context, size: size, textureSize: tex.size)
@@ -28,6 +31,10 @@ struct YOLOOverlayView: View {
                 } else {
                     Rectangle()
                         .fill(Color.black)
+                        .aspectRatio(
+                            CGSize(width: Config.stabWidth, height: Config.stabHeight),
+                            contentMode: .fit
+                        )
                         .overlay(Text("No Preview").foregroundColor(.gray))
                 }
             }
@@ -93,7 +100,7 @@ struct YOLOOverlayView: View {
         context.stroke(
             Path(rect),
             with: .color(.cyan),
-            lineWidth: 3
+            lineWidth: 1
         )
         
         let conf = String(format: "%.2f", debug.yoloConfidence)

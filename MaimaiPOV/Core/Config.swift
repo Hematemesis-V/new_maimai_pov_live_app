@@ -25,6 +25,26 @@ enum Config {
         }
         set { UserDefaults.standard.set(newValue, forKey: yoloPreviewEnabledKey) }
     }
+    static let defaultYoloOverlayEnabled: Bool = false
+    static var yoloOverlayEnabled: Bool {
+        get {
+            guard UserDefaults.standard.object(forKey: yoloOverlayEnabledKey) != nil else {
+                return defaultYoloOverlayEnabled
+            }
+            return UserDefaults.standard.bool(forKey: yoloOverlayEnabledKey)
+        }
+        set { UserDefaults.standard.set(newValue, forKey: yoloOverlayEnabledKey) }
+    }
+    static let defaultYoloOverlayScale: Double = 0.6
+    static var yoloOverlayScale: Double {
+        get {
+            guard UserDefaults.standard.object(forKey: yoloOverlayScaleKey) != nil else {
+                return defaultYoloOverlayScale
+            }
+            return UserDefaults.standard.double(forKey: yoloOverlayScaleKey)
+        }
+        set { UserDefaults.standard.set(newValue, forKey: yoloOverlayScaleKey) }
+    }
     static let outputWidth  = 720
     static let outputHeight = 1280
 
@@ -225,6 +245,8 @@ enum Config {
     private static let readoutTimeKey = "com.maimai.readoutTimeMs"
     private static let yoloPaddingKey = "com.maimai.yoloPadding"
     private static let yoloPreviewEnabledKey = "com.maimai.yoloPreviewEnabled"
+    private static let yoloOverlayEnabledKey = "com.maimai.yoloOverlayEnabled"
+    private static let yoloOverlayScaleKey = "com.maimai.yoloOverlayScale"
     private static let focusValueKey = "com.maimai.focusValue"
     private static let shutterTimescaleKey = "com.maimai.shutterTimescale"
     private static let isoValueKey = "com.maimai.isoValue"

@@ -28,6 +28,13 @@ class DebugInfoManager: ObservableObject {
     @Published var yoloTopBoxes: String = "--"
     @Published var yoloBestRank: Int = 0
     @Published var yoloPreviewImage: UIImage?
+    
+    @Published var yoloStabCx: Float = 0
+    @Published var yoloStabCy: Float = 0
+    @Published var yoloStabW: Float = 0
+    @Published var yoloStabH: Float = 0
+    @Published var yoloOverlayEnabled: Bool = Config.defaultYoloOverlayEnabled
+    @Published var yoloOverlayScale: Double = Config.defaultYoloOverlayScale
 
     @Published var trackCx: Float = 0
     @Published var trackCy: Float = 0

@@ -31,6 +31,8 @@ class LivePipelineManager: ObservableObject {
     @Published var previewEnabled: Bool = Config.previewEnabled
     @Published var yoloPadding: Double = Double(Config.yoloPadding)
     @Published var yoloPreviewEnabled: Bool = Config.yoloPreviewEnabled
+    @Published var yoloOverlayEnabled: Bool = Config.yoloOverlayEnabled
+    @Published var yoloOverlayScale: Double = Config.yoloOverlayScale
 
     @Published var trackAlpha: Double = Config.trackAlpha
     @Published var trackMaxSpeed: Double = Config.trackMaxSpeed
@@ -65,6 +67,10 @@ class LivePipelineManager: ObservableObject {
             return stabilizer?.outputTexture
         }
         return nil
+    }
+    
+    var stabTexture: MTLTexture? {
+        stabilizer?.outputTexture
     }
 
     var isCropActive: Bool { cropRenderer != nil }
@@ -149,6 +155,10 @@ class LivePipelineManager: ObservableObject {
                         ? String(format: "%.0f,%.0f,%.0f,%.0f",
                             result.stabCx, result.stabCy, result.stabW, result.stabH)
                         : "--"
+                    self.debug.yoloStabCx = result.stabCx
+                    self.debug.yoloStabCy = result.stabCy
+                    self.debug.yoloStabW = result.stabW
+                    self.debug.yoloStabH = result.stabH
                     self.debug.yoloBoxesInfo = "\(result.innerScreenBoxesCount)/\(result.allBoxesCount)"
                     self.debug.yoloTopBoxes = result.topBoxes
                     self.debug.yoloBestRank = result.bestBoxRank
@@ -192,6 +202,8 @@ class LivePipelineManager: ObservableObject {
         let u = YOLOPreprocessUniforms(padding: Config.yoloPadding)
         debug.yoloUniforms = String(format: "s%.3f pH%.0f pV%.0f pL%.0f pT%.0f",
             u.scale, u.padH, u.padV, u.padLeft, u.padTop)
+        debug.yoloOverlayEnabled = Config.yoloOverlayEnabled
+        debug.yoloOverlayScale = Config.yoloOverlayScale
 
         // 3. 初始化相机，应用所有持久化设置
         camera.checkPermissionAndStart()
@@ -389,6 +401,16 @@ class LivePipelineManager: ObservableObject {
 
     @MainActor func updateYoloPreviewEnabled() {
         Config.yoloPreviewEnabled = yoloPreviewEnabled
+    }
+    
+    @MainActor func updateYoloOverlayEnabled() {
+        Config.yoloOverlayEnabled = yoloOverlayEnabled
+        debug.yoloOverlayEnabled = yoloOverlayEnabled
+    }
+    
+    @MainActor func updateYoloOverlayScale() {
+        Config.yoloOverlayScale = yoloOverlayScale
+        debug.yoloOverlayScale = yoloOverlayScale
     }
 
     @MainActor func updateTrackAlpha() {

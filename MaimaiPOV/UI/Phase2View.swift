@@ -91,6 +91,22 @@ struct Phase2View: View {
                     }
                 }
             }
+            
+            if pipeline.yoloOverlayEnabled, pipeline.yoloEnabled {
+                VStack {
+                    Spacer()
+                    HStack {
+                        YOLOOverlayView(
+                            debug: pipeline.debug,
+                            device: pipeline.device,
+                            texture: pipeline.stabTexture
+                        )
+                        .frame(maxWidth: UIScreen.main.bounds.width * 0.7, maxHeight: UIScreen.main.bounds.height * 0.5)
+                        .padding(4)
+                        Spacer()
+                    }
+                }
+            }
         }
     }
 
@@ -132,6 +148,8 @@ struct Phase2View: View {
                         syncRow
                         yoloToggleRow
                         yoloPaddingRow
+                        yoloOverlayToggleRow
+                        yoloOverlayScaleRow
                         trackingSectionHeader
                         trackAlphaRow
                         trackMaxSpeedRow
@@ -307,6 +325,33 @@ struct Phase2View: View {
             Slider(value: $pipeline.yoloPadding, in: 0...100, step: 1)
         } valueLabel: {
             Text("\(Int(pipeline.yoloPadding))px").font(.caption).foregroundColor(.gray).frame(width: 40, alignment: .trailing)
+        }
+    }
+    
+    private var yoloOverlayToggleRow: some View {
+        HStack {
+            Text("YOLOOverlay").font(.caption).frame(width: 80, alignment: .leading)
+            Toggle("", isOn: $pipeline.yoloOverlayEnabled)
+                .labelsHidden()
+                .onChange(of: pipeline.yoloOverlayEnabled) { _ in
+                    pipeline.updateYoloOverlayEnabled()
+                }
+            Spacer()
+            Text(pipeline.yoloOverlayEnabled ? "ON" : "OFF")
+                .font(.caption2)
+                .foregroundColor(pipeline.yoloOverlayEnabled ? .green : .red)
+        }
+    }
+    
+    private var yoloOverlayScaleRow: some View {
+        labeledRow("Scale") {
+            Slider(value: $pipeline.yoloOverlayScale, in: 0.3...1.2, step: 0.1)
+        } valueLabel: {
+            Text(String(format: "%.1fx", pipeline.yoloOverlayScale)).font(.caption).foregroundColor(.gray).frame(width: 40, alignment: .trailing)
+        }
+        .disabled(!pipeline.yoloOverlayEnabled)
+        .onChange(of: pipeline.yoloOverlayScale) { _ in
+            pipeline.updateYoloOverlayScale()
         }
     }
 

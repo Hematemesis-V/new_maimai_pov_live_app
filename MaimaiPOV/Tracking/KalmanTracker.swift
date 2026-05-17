@@ -103,27 +103,28 @@ class KalmanTracker {
             wasDetected = true
         } else if wasDetected {
             let elapsed = now - lastDetectTime
-            if elapsed > recenterGrace * 3 {
-                applyVelocityDamping(damping: 0.9)
+            if elapsed > recenterGrace {
+                applyVelocityDamping(damping: 0.85)
             }
 
             predict()
 
-            if elapsed > recenterGrace * 5 {
+            if elapsed > recenterGrace * 3 {
                 let targetCx = stabWidth / 2.0
                 let targetCy = stabHeight / 2.0
                 let maxCropH = stabHeight
                 let targetW = maxCropH * outputRatio
                 let targetH = maxCropH
 
-                let virtualZ: [Float] = [targetCx, targetCy, targetW, targetH]
-                let virtualR = KalmanTracker.identity(m, value: 1000.0)
-                updateWithMeasurementAndR(z: virtualZ, r: virtualR)
-
-                x[4] *= 0.95
-                x[5] *= 0.95
-                x[6] *= 0.95
-                x[7] *= 0.95
+                let recenterStrength: Float = 0.02
+                x[0] += (targetCx - x[0]) * recenterStrength
+                x[1] += (targetCy - x[1]) * recenterStrength
+                x[2] += (targetW - x[2]) * recenterStrength
+                x[3] += (targetH - x[3]) * recenterStrength
+                x[4] *= 0.9
+                x[5] *= 0.9
+                x[6] *= 0.9
+                x[7] *= 0.9
             }
         }
 
@@ -197,10 +198,10 @@ class KalmanTracker {
     }
 
     func updateNoiseFromIntuitiveParams() {
-        let qPosMapped = lerp(0.1, 50.0, responsiveness)
-        let qVelMapped = lerp(0.01, 10.0, responsiveness)
-        let rPosMapped = lerp(1.0, 100.0, smoothness)
-        let rSizeMapped = lerp(2.0, 200.0, smoothness)
+        let qPosMapped = lerp(0.05, 80.0, responsiveness)
+        let qVelMapped = lerp(0.005, 20.0, responsiveness)
+        let rPosMapped = lerp(0.5, 500.0, smoothness)
+        let rSizeMapped = lerp(1.0, 1000.0, smoothness)
 
         qPos = qPosMapped
         qVel = qVelMapped
@@ -209,13 +210,22 @@ class KalmanTracker {
 
         rebuildQ()
         rebuildR()
+        boostP()
     }
 
     func updateNoiseFromAdvancedParams() {
-        smoothness = 0.5
-        responsiveness = 0.5
         rebuildQ()
         rebuildR()
+        boostP()
+    }
+
+    private func boostP() {
+        for i in 0..<4 {
+            P[i][i] = max(P[i][i], 100.0)
+        }
+        for i in 4..<8 {
+            P[i][i] = max(P[i][i], 500.0)
+        }
     }
 
     func getPredictedCx() -> Float { predictedCx }

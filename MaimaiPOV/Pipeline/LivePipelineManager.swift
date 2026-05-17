@@ -438,6 +438,7 @@ class LivePipelineManager: ObservableObject {
         kalmanTracker.smoothness = Float(trackSmoothness)
         kalmanTracker.updateNoiseFromIntuitiveParams()
         debug.trackSmoothness = Float(trackSmoothness)
+        syncAdvancedParamsFromKalman()
     }
 
     @MainActor func updateTrackResponsiveness() {
@@ -445,6 +446,7 @@ class LivePipelineManager: ObservableObject {
         kalmanTracker.responsiveness = Float(trackResponsiveness)
         kalmanTracker.updateNoiseFromIntuitiveParams()
         debug.trackResponsiveness = Float(trackResponsiveness)
+        syncAdvancedParamsFromKalman()
     }
 
     @MainActor func updateTrackTargetRatio() {
@@ -475,6 +477,17 @@ class LivePipelineManager: ObservableObject {
         Config.trackRSize = trackRSize
         kalmanTracker.rSize = Float(trackRSize)
         kalmanTracker.updateNoiseFromAdvancedParams()
+    }
+
+    private func syncAdvancedParamsFromKalman() {
+        trackQPos = Double(kalmanTracker.qPos)
+        trackQVel = Double(kalmanTracker.qVel)
+        trackRPos = Double(kalmanTracker.rPos)
+        trackRSize = Double(kalmanTracker.rSize)
+        Config.trackQPos = trackQPos
+        Config.trackQVel = trackQVel
+        Config.trackRPos = trackRPos
+        Config.trackRSize = trackRSize
     }
 
     @MainActor func updateReadoutTime() {

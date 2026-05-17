@@ -25,9 +25,9 @@ class SmoothTracker {
     private var lastDetectTime: TimeInterval = 0
     private var wasDetected = false
 
-    var alpha: Float = Float(Config.trackAlpha)
-    var maxSpeed: Float = Float(Config.trackMaxSpeed)
-    var deadZone: Float = Float(Config.trackDeadZone)
+    var alpha: Float = 0.8
+    var maxSpeed: Float = 15.0
+    var deadZone: Float = 8.0
     var targetRatio: Float = Float(Config.trackTargetRatio)
     var recenterDecay: Float = Config.defaultRecenterDecay
     var recenterGrace: Double = Config.defaultRecenterGrace

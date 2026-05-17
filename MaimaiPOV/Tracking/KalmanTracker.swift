@@ -302,10 +302,10 @@ class KalmanTracker {
     }
 
     func updateNoiseFromIntuitiveParams() {
-        let qPosMapped = lerp(0.05, 80.0, responsiveness)
-        let qVelMapped = lerp(0.005, 20.0, responsiveness)
-        let rPosMapped = lerp(0.5, 500.0, smoothness)
-        let rSizeMapped = lerp(1.0, 1000.0, smoothness)
+        let qPosMapped = lerp(0.05, 120.0, responsiveness)
+        let qVelMapped = lerp(0.005, 40.0, responsiveness)
+        let rPosMapped = lerp(0.5, 300.0, smoothness)
+        let rSizeMapped = lerp(1.0, 800.0, smoothness)
 
         qPos = qPosMapped
         qVel = qVelMapped

@@ -35,7 +35,7 @@ class KalmanTracker {
     var responsiveness: Float = 0.5
     var targetRatio: Float = Float(Config.trackTargetRatio)
 
-    var outputSmoothing: Float = 0.3
+    var outputSmoothing: Float = 1.0
 
     private var outputEmaCx: Float?
     private var outputEmaCy: Float?

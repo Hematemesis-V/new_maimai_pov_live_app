@@ -46,9 +46,8 @@ struct Phase2View: View {
         .onChange(of: pipeline.previewEnabled) { newValue in 
             Config.previewEnabled = newValue
         }
-        .onChange(of: pipeline.trackAlpha) { _ in pipeline.updateTrackAlpha() }
-        .onChange(of: pipeline.trackMaxSpeed) { _ in pipeline.updateTrackMaxSpeed() }
-        .onChange(of: pipeline.trackDeadZone) { _ in pipeline.updateTrackDeadZone() }
+        .onChange(of: pipeline.trackSmoothness) { _ in pipeline.updateTrackSmoothness() }
+        .onChange(of: pipeline.trackResponsiveness) { _ in pipeline.updateTrackResponsiveness() }
         .onChange(of: pipeline.trackTargetRatio) { _ in pipeline.updateTrackTargetRatio() }
         .onDisappear {
             pipeline.stop()
@@ -153,9 +152,8 @@ struct Phase2View: View {
                         yoloOverlayToggleRow
                         yoloOverlayScaleRow
                         trackingSectionHeader
-                        trackAlphaRow
-                        trackMaxSpeedRow
-                        trackDeadZoneRow
+                        trackSmoothnessRow
+                        trackResponsivenessRow
                         trackTargetRatioRow
                         liveStreamSectionHeader
                         rtmpUrlRow
@@ -365,27 +363,19 @@ struct Phase2View: View {
         }
     }
 
-    private var trackAlphaRow: some View {
-        labeledRow("Alpha") {
-            Slider(value: $pipeline.trackAlpha, in: 0.01...1.0, step: 0.01)
+    private var trackSmoothnessRow: some View {
+        labeledRow("Smooth") {
+            Slider(value: $pipeline.trackSmoothness, in: 0.0...1.0, step: 0.05)
         } valueLabel: {
-            Text(String(format: "%.2f", pipeline.trackAlpha)).font(.caption).foregroundColor(.gray).frame(width: 40, alignment: .trailing)
+            Text(String(format: "%.2f", pipeline.trackSmoothness)).font(.caption).foregroundColor(.gray).frame(width: 40, alignment: .trailing)
         }
     }
 
-    private var trackMaxSpeedRow: some View {
-        labeledRow("MaxSpeed") {
-            Slider(value: $pipeline.trackMaxSpeed, in: 1...30, step: 1)
+    private var trackResponsivenessRow: some View {
+        labeledRow("Resp") {
+            Slider(value: $pipeline.trackResponsiveness, in: 0.0...1.0, step: 0.05)
         } valueLabel: {
-            Text("\(Int(pipeline.trackMaxSpeed))").font(.caption).foregroundColor(.gray).frame(width: 40, alignment: .trailing)
-        }
-    }
-
-    private var trackDeadZoneRow: some View {
-        labeledRow("DeadZone") {
-            Slider(value: $pipeline.trackDeadZone, in: 0...50, step: 1)
-        } valueLabel: {
-            Text("\(Int(pipeline.trackDeadZone))").font(.caption).foregroundColor(.gray).frame(width: 40, alignment: .trailing)
+            Text(String(format: "%.2f", pipeline.trackResponsiveness)).font(.caption).foregroundColor(.gray).frame(width: 40, alignment: .trailing)
         }
     }
 

@@ -35,9 +35,8 @@ class LivePipelineManager: ObservableObject {
     @Published var yoloOverlayScale: Double = Config.yoloOverlayScale
     @Published var yoloTargetFPS: Double = Config.yoloTargetFPS
 
-    @Published var trackAlpha: Double = Config.trackAlpha
-    @Published var trackMaxSpeed: Double = Config.trackMaxSpeed
-    @Published var trackDeadZone: Double = Config.trackDeadZone
+    @Published var trackSmoothness: Double = Config.trackSmoothness
+    @Published var trackResponsiveness: Double = Config.trackResponsiveness
     @Published var trackTargetRatio: Double = Config.trackTargetRatio
 
     @Published var currentFPS: Double = 0
@@ -51,8 +50,8 @@ class LivePipelineManager: ObservableObject {
     var stabilizer: MetalStabilizer?
     var yoloDetector: YOLODetector?
     var cropRenderer: CropRenderer?
-    var smoothTracker = SmoothTracker()
-    var latestTrackOutput: SmoothTracker.TrackOutput?
+    var kalmanTracker = KalmanTracker()
+    var latestTrackOutput: KalmanTracker.TrackOutput?
 
     var onStreamBufferAvailable: ((CVPixelBuffer, CMTime) -> Void)?
     var onAudioSampleAvailable: ((CMSampleBuffer, Double) -> Void)?
@@ -127,14 +126,13 @@ class LivePipelineManager: ObservableObject {
             height: Config.outputHeight
         )
 
-        // 2. 初始化跟踪器，正确应用持久化设置（顺序要对！）
-        smoothTracker.alpha = Float(trackAlpha)
-        smoothTracker.maxSpeed = Float(trackMaxSpeed)
-        smoothTracker.deadZone = Float(trackDeadZone)
-        smoothTracker.targetRatio = Float(trackTargetRatio)
-        debug.trackAlpha = Float(trackAlpha)
-        debug.trackMaxSpeed = Float(trackMaxSpeed)
-        debug.trackDeadZone = Float(trackDeadZone)
+        // 2. 初始化卡尔曼跟踪器
+        kalmanTracker.smoothness = Float(trackSmoothness)
+        kalmanTracker.responsiveness = Float(trackResponsiveness)
+        kalmanTracker.targetRatio = Float(trackTargetRatio)
+        kalmanTracker.updateNoiseFromIntuitiveParams()
+        debug.trackSmoothness = Float(trackSmoothness)
+        debug.trackResponsiveness = Float(trackResponsiveness)
         debug.trackTargetRatio = Float(trackTargetRatio)
 
         let detector = YOLODetector(device: device)
@@ -165,12 +163,13 @@ class LivePipelineManager: ObservableObject {
                     self.debug.yoloTopBoxes = result.topBoxes
                     self.debug.yoloBestRank = result.bestBoxRank
 
-                    let track = self.smoothTracker.update(
+                    let track = self.kalmanTracker.update(
                         detected: result.detected,
                         stabCx: result.stabCx,
                         stabCy: result.stabCy,
                         stabW: result.stabW,
-                        stabH: result.stabH
+                        stabH: result.stabH,
+                        dt: 0
                     )
                     self.latestTrackOutput = track
                     self.debug.trackCx = track.cx
@@ -182,6 +181,10 @@ class LivePipelineManager: ObservableObject {
                     self.debug.trackSmoothW = track.smoothW
                     self.debug.trackSmoothH = track.smoothH
                     self.debug.trackState = track.state
+                    self.debug.kalmanVx = self.kalmanTracker.getVelocityVx()
+                    self.debug.kalmanVy = self.kalmanTracker.getVelocityVy()
+                    self.debug.kalmanVw = self.kalmanTracker.getVelocityVw()
+                    self.debug.kalmanVh = self.kalmanTracker.getVelocityVh()
 
                     if self.yoloPreviewEnabled {
                         yoloPreviewFrameCount += 1
@@ -239,12 +242,12 @@ class LivePipelineManager: ObservableObject {
                    let cr = self.cropRenderer,
                    let writeBuffer = pool.nextWriteBuffer() {
                     let timestamp = CMTime(seconds: alignedTime, preferredTimescale: 1000000000)
-                    let track: SmoothTracker.TrackOutput
+                    let track: KalmanTracker.TrackOutput
                     if let t = self.latestTrackOutput {
                         track = t
                     } else {
                         let fb = cr.makeFallbackTrack()
-                        track = SmoothTracker.TrackOutput(
+                        track = KalmanTracker.TrackOutput(
                             cx: fb.cx, cy: fb.cy, cropW: fb.cropW, cropH: fb.cropH,
                             smoothCx: fb.cx, smoothCy: fb.cy, smoothW: fb.cropW, smoothH: fb.cropH,
                             detected: false, state: "fallback"
@@ -422,27 +425,23 @@ class LivePipelineManager: ObservableObject {
         debug.yoloTargetFPS = yoloTargetFPS
     }
 
-    @MainActor func updateTrackAlpha() {
-        Config.trackAlpha = trackAlpha
-        smoothTracker.alpha = Float(trackAlpha)
-        debug.trackAlpha = Float(trackAlpha)
+    @MainActor func updateTrackSmoothness() {
+        Config.trackSmoothness = trackSmoothness
+        kalmanTracker.smoothness = Float(trackSmoothness)
+        kalmanTracker.updateNoiseFromIntuitiveParams()
+        debug.trackSmoothness = Float(trackSmoothness)
     }
 
-    @MainActor func updateTrackMaxSpeed() {
-        Config.trackMaxSpeed = trackMaxSpeed
-        smoothTracker.maxSpeed = Float(trackMaxSpeed)
-        debug.trackMaxSpeed = Float(trackMaxSpeed)
-    }
-
-    @MainActor func updateTrackDeadZone() {
-        Config.trackDeadZone = trackDeadZone
-        smoothTracker.deadZone = Float(trackDeadZone)
-        debug.trackDeadZone = Float(trackDeadZone)
+    @MainActor func updateTrackResponsiveness() {
+        Config.trackResponsiveness = trackResponsiveness
+        kalmanTracker.responsiveness = Float(trackResponsiveness)
+        kalmanTracker.updateNoiseFromIntuitiveParams()
+        debug.trackResponsiveness = Float(trackResponsiveness)
     }
 
     @MainActor func updateTrackTargetRatio() {
         Config.trackTargetRatio = trackTargetRatio
-        smoothTracker.targetRatio = Float(trackTargetRatio)
+        kalmanTracker.targetRatio = Float(trackTargetRatio)
         debug.trackTargetRatio = Float(trackTargetRatio)
     }
 

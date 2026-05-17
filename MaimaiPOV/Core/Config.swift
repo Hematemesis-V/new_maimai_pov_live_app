@@ -102,35 +102,25 @@ enum Config {
     }
 
     // Tracking defaults
-    static let defaultAlpha: Float = 0.8
-    static var trackAlpha: Double {
+    static let defaultSmoothness: Float = 0.5
+    static var trackSmoothness: Double {
         get {
-            guard UserDefaults.standard.object(forKey: trackAlphaKey) != nil else {
-                return Double(defaultAlpha)
+            guard UserDefaults.standard.object(forKey: trackSmoothnessKey) != nil else {
+                return Double(defaultSmoothness)
             }
-            return UserDefaults.standard.double(forKey: trackAlphaKey)
+            return UserDefaults.standard.double(forKey: trackSmoothnessKey)
         }
-        set { UserDefaults.standard.set(newValue, forKey: trackAlphaKey) }
+        set { UserDefaults.standard.set(newValue, forKey: trackSmoothnessKey) }
     }
-    static let defaultMaxSpeed: Float = 15.0
-    static var trackMaxSpeed: Double {
+    static let defaultResponsiveness: Float = 0.5
+    static var trackResponsiveness: Double {
         get {
-            guard UserDefaults.standard.object(forKey: trackMaxSpeedKey) != nil else {
-                return Double(defaultMaxSpeed)
+            guard UserDefaults.standard.object(forKey: trackResponsivenessKey) != nil else {
+                return Double(defaultResponsiveness)
             }
-            return UserDefaults.standard.double(forKey: trackMaxSpeedKey)
+            return UserDefaults.standard.double(forKey: trackResponsivenessKey)
         }
-        set { UserDefaults.standard.set(newValue, forKey: trackMaxSpeedKey) }
-    }
-    static let defaultDeadZone: Float = 8.0
-    static var trackDeadZone: Double {
-        get {
-            guard UserDefaults.standard.object(forKey: trackDeadZoneKey) != nil else {
-                return Double(defaultDeadZone)
-            }
-            return UserDefaults.standard.double(forKey: trackDeadZoneKey)
-        }
-        set { UserDefaults.standard.set(newValue, forKey: trackDeadZoneKey) }
+        set { UserDefaults.standard.set(newValue, forKey: trackResponsivenessKey) }
     }
     static let defaultTargetRatio: Float = 0.5
     static var trackTargetRatio: Double {
@@ -270,9 +260,8 @@ enum Config {
     private static let stabEnabledKey = "com.maimai.stabEnabled"
     private static let previewEnabledKey = "com.maimai.previewEnabled"
     private static let yoloEnabledKey = "com.maimai.yoloEnabled"
-    private static let trackAlphaKey = "com.maimai.trackAlpha"
-    private static let trackMaxSpeedKey = "com.maimai.trackMaxSpeed"
-    private static let trackDeadZoneKey = "com.maimai.trackDeadZone"
+    private static let trackSmoothnessKey = "com.maimai.trackSmoothness"
+    private static let trackResponsivenessKey = "com.maimai.trackResponsiveness"
     private static let trackTargetRatioKey = "com.maimai.trackTargetRatio"
 
     // Video encoding

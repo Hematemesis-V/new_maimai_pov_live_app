@@ -47,10 +47,13 @@ class DebugInfoManager: ObservableObject {
     @Published var trackSmoothW: Float = 0
     @Published var trackSmoothH: Float = 0
     @Published var trackState: String = "idle"
-    @Published var trackAlpha: Float = Float(Config.defaultAlpha)
-    @Published var trackMaxSpeed: Float = Float(Config.defaultMaxSpeed)
-    @Published var trackDeadZone: Float = Float(Config.defaultDeadZone)
+    @Published var trackSmoothness: Float = Float(Config.defaultSmoothness)
+    @Published var trackResponsiveness: Float = Float(Config.defaultResponsiveness)
     @Published var trackTargetRatio: Float = Float(Config.defaultTargetRatio)
+    @Published var kalmanVx: Float = 0
+    @Published var kalmanVy: Float = 0
+    @Published var kalmanVw: Float = 0
+    @Published var kalmanVh: Float = 0
 
     @Published var logMessages: [String] = []
     @Published var streamInfo: String = "--"

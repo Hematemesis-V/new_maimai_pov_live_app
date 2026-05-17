@@ -45,7 +45,7 @@ enum Config {
         }
         set { UserDefaults.standard.set(newValue, forKey: yoloOverlayScaleKey) }
     }
-    static let defaultYoloTargetFPS: Double = 30.0
+    static let defaultYoloTargetFPS: Double = 15.0
     static var yoloTargetFPS: Double {
         get {
             guard UserDefaults.standard.object(forKey: yoloTargetFPSKey) != nil else {

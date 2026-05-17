@@ -47,7 +47,7 @@ class YOLODetector {
     var onDetection: ((DetectionResult) -> Void)?
 
     var targetFPS: Double = Config.yoloTargetFPS
-    private var lastEnqueueTime: Double = 0
+    private var frameSkipCounter: Int = 0
     private var inferenceCount: Int = 0
     private var inferenceCountStartTime: Double = 0
     private(set) var actualFPS: Double = 0
@@ -104,12 +104,12 @@ class YOLODetector {
     }
 
     func enqueue(stabTexture: MTLTexture) {
-        let now = CACurrentMediaTime()
-        let minInterval = 1.0 / max(targetFPS, 1.0)
-        if lastEnqueueTime > 0, now - lastEnqueueTime < minInterval {
+        let skip = max(1, Int(round(60.0 / max(targetFPS, 1.0))))
+        frameSkipCounter += 1
+        if frameSkipCounter < skip {
             return
         }
-        lastEnqueueTime = now
+        frameSkipCounter = 0
 
         let writeIdx = stagingWriteIndex
         let targetTexture = stagingTextures[writeIdx]

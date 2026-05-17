@@ -102,7 +102,7 @@ enum Config {
     }
 
     // Tracking defaults
-    static let defaultSmoothness: Float = 0.15
+    static let defaultSmoothness: Float = 0.3
     static var trackSmoothness: Double {
         get {
             guard UserDefaults.standard.object(forKey: trackSmoothnessKey) != nil else {
@@ -112,7 +112,7 @@ enum Config {
         }
         set { UserDefaults.standard.set(newValue, forKey: trackSmoothnessKey) }
     }
-    static let defaultResponsiveness: Float = 0.85
+    static let defaultResponsiveness: Float = 0.7
     static var trackResponsiveness: Double {
         get {
             guard UserDefaults.standard.object(forKey: trackResponsivenessKey) != nil else {

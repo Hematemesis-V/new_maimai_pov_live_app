@@ -35,6 +35,8 @@ class DebugInfoManager: ObservableObject {
     @Published var yoloStabH: Float = 0
     @Published var yoloOverlayEnabled: Bool = Config.defaultYoloOverlayEnabled
     @Published var yoloOverlayScale: Double = Config.defaultYoloOverlayScale
+    @Published var yoloTargetFPS: Double = Config.defaultYoloTargetFPS
+    @Published var yoloActualFPS: Double = 0
 
     @Published var trackCx: Float = 0
     @Published var trackCy: Float = 0

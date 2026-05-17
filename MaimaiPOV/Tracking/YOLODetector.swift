@@ -44,6 +44,12 @@ class YOLODetector {
 
     var onDetection: ((DetectionResult) -> Void)?
 
+    var targetFPS: Double = Config.yoloTargetFPS
+    private var lastEnqueueTime: Double = 0
+    private var inferenceCount: Int = 0
+    private var inferenceCountStartTime: Double = 0
+    private(set) var actualFPS: Double = 0
+
     private var lastPixelBuffer: CVPixelBuffer?
     var previewPixelBuffer: CVPixelBuffer? {
         stagingLock.lock()
@@ -96,6 +102,13 @@ class YOLODetector {
     }
 
     func enqueue(stabTexture: MTLTexture) {
+        let now = CACurrentMediaTime()
+        let minInterval = 1.0 / max(targetFPS, 1.0)
+        if lastEnqueueTime > 0, now - lastEnqueueTime < minInterval {
+            return
+        }
+        lastEnqueueTime = now
+
         let writeIdx = stagingWriteIndex
         let targetTexture = stagingTextures[writeIdx]
 
@@ -151,9 +164,24 @@ class YOLODetector {
 
                 let result = infer(pixelBuffer, preprocessMs: prepElapsed * 1000.0)
                 if let r = result {
+                    updateActualFPS()
                     onDetection?(r)
                 }
             }
+        }
+    }
+
+    private func updateActualFPS() {
+        let now = CACurrentMediaTime()
+        inferenceCount += 1
+        if inferenceCountStartTime <= 0 {
+            inferenceCountStartTime = now
+        }
+        let elapsed = now - inferenceCountStartTime
+        if elapsed >= 1.0 {
+            actualFPS = Double(inferenceCount) / elapsed
+            inferenceCount = 0
+            inferenceCountStartTime = now
         }
     }
 

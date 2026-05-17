@@ -45,6 +45,16 @@ enum Config {
         }
         set { UserDefaults.standard.set(newValue, forKey: yoloOverlayScaleKey) }
     }
+    static let defaultYoloTargetFPS: Double = 30.0
+    static var yoloTargetFPS: Double {
+        get {
+            guard UserDefaults.standard.object(forKey: yoloTargetFPSKey) != nil else {
+                return defaultYoloTargetFPS
+            }
+            return UserDefaults.standard.double(forKey: yoloTargetFPSKey)
+        }
+        set { UserDefaults.standard.set(newValue, forKey: yoloTargetFPSKey) }
+    }
     static let outputWidth  = 720
     static let outputHeight = 1280
 
@@ -247,6 +257,7 @@ enum Config {
     private static let yoloPreviewEnabledKey = "com.maimai.yoloPreviewEnabled"
     private static let yoloOverlayEnabledKey = "com.maimai.yoloOverlayEnabled"
     private static let yoloOverlayScaleKey = "com.maimai.yoloOverlayScale"
+    private static let yoloTargetFPSKey = "com.maimai.yoloTargetFPS"
     private static let focusValueKey = "com.maimai.focusValue"
     private static let shutterTimescaleKey = "com.maimai.shutterTimescale"
     private static let isoValueKey = "com.maimai.isoValue"

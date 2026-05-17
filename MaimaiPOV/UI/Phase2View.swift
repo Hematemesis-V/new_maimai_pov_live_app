@@ -42,6 +42,7 @@ struct Phase2View: View {
             Config.yoloEnabled = newValue
         }
         .onChange(of: pipeline.yoloPreviewEnabled) { _ in pipeline.updateYoloPreviewEnabled() }
+        .onChange(of: pipeline.yoloTargetFPS) { _ in pipeline.updateYoloTargetFPS() }
         .onChange(of: pipeline.previewEnabled) { newValue in 
             Config.previewEnabled = newValue
         }
@@ -148,6 +149,7 @@ struct Phase2View: View {
                         syncRow
                         yoloToggleRow
                         yoloPaddingRow
+                        yoloTargetFPSRow
                         yoloOverlayToggleRow
                         yoloOverlayScaleRow
                         trackingSectionHeader
@@ -325,6 +327,14 @@ struct Phase2View: View {
             Slider(value: $pipeline.yoloPadding, in: 0...100, step: 1)
         } valueLabel: {
             Text("\(Int(pipeline.yoloPadding))px").font(.caption).foregroundColor(.gray).frame(width: 40, alignment: .trailing)
+        }
+    }
+
+    private var yoloTargetFPSRow: some View {
+        labeledRow("YFPS") {
+            Slider(value: $pipeline.yoloTargetFPS, in: 10...60, step: 1)
+        } valueLabel: {
+            Text("\(Int(pipeline.yoloTargetFPS))").font(.caption).foregroundColor(.gray).frame(width: 40, alignment: .trailing)
         }
     }
     

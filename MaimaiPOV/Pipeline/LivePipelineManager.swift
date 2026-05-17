@@ -33,6 +33,7 @@ class LivePipelineManager: ObservableObject {
     @Published var yoloPreviewEnabled: Bool = Config.yoloPreviewEnabled
     @Published var yoloOverlayEnabled: Bool = Config.yoloOverlayEnabled
     @Published var yoloOverlayScale: Double = Config.yoloOverlayScale
+    @Published var yoloTargetFPS: Double = Config.yoloTargetFPS
 
     @Published var trackAlpha: Double = Config.trackAlpha
     @Published var trackMaxSpeed: Double = Config.trackMaxSpeed
@@ -138,6 +139,7 @@ class LivePipelineManager: ObservableObject {
 
         let detector = YOLODetector(device: device)
         self.yoloDetector = detector
+        detector?.targetFPS = yoloTargetFPS
         var yoloPreviewFrameCount = 0
         if detector != nil {
             detector?.onDetection = { [weak self] result in
@@ -313,6 +315,7 @@ class LivePipelineManager: ObservableObject {
                     self.debug.fps = Double(count)
                     self.debug.frameCount = count
                     self.debug.streamInfo = "\(streamCount) bufs/s 720x1280"
+                    self.debug.yoloActualFPS = self.yoloDetector?.actualFPS ?? 0
                 }
             }
         }
@@ -411,6 +414,12 @@ class LivePipelineManager: ObservableObject {
     @MainActor func updateYoloOverlayScale() {
         Config.yoloOverlayScale = yoloOverlayScale
         debug.yoloOverlayScale = yoloOverlayScale
+    }
+
+    @MainActor func updateYoloTargetFPS() {
+        Config.yoloTargetFPS = yoloTargetFPS
+        yoloDetector?.targetFPS = yoloTargetFPS
+        debug.yoloTargetFPS = yoloTargetFPS
     }
 
     @MainActor func updateTrackAlpha() {

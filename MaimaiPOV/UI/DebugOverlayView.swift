@@ -99,6 +99,8 @@ struct DebugOverlayView: View {
             infoRow("Boxes", debug.yoloBoxesInfo)
             infoRow("Top3", debug.yoloTopBoxes)
             infoRow("Rank", "\(debug.yoloBestRank)", color: debug.yoloBestRank == 1 ? .green : .orange)
+            infoRow("YFPS", String(format: "%.0f/%.0f", debug.yoloActualFPS, debug.yoloTargetFPS),
+                    color: debug.yoloActualFPS >= debug.yoloTargetFPS * 0.8 ? .green : .orange)
             infoRow("U", debug.yoloUniforms)
 
             Divider().background(Color.white.opacity(0.2)).padding(.vertical, 2)

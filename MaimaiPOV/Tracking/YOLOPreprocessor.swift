@@ -50,14 +50,14 @@ class YOLOPreprocessor {
             ]
             guard let surface = IOSurface(properties: surfaceProps) else { return nil }
 
-            var pb: CVPixelBuffer?
+            var pb: Unmanaged<CVPixelBuffer>?
             let err = CVPixelBufferCreateWithIOSurface(
                 kCFAllocatorDefault,
                 surface,
                 nil,
                 &pb
             )
-            guard err == kCVReturnSuccess, let pixelBuffer = pb else { return nil }
+            guard err == kCVReturnSuccess, let pixelBuffer = pb?.takeRetainedValue() else { return nil }
 
             let texDesc = MTLTextureDescriptor.texture2DDescriptor(
                 pixelFormat: .bgra8Unorm,

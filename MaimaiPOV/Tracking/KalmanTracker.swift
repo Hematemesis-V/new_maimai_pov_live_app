@@ -178,6 +178,97 @@ class KalmanTracker {
         )
     }
 
+    func predictOnly() -> TrackOutput {
+        let now = CACurrentMediaTime()
+        let stabWidth = Float(Config.stabWidth)
+        let stabHeight = Float(Config.stabHeight)
+        let outputRatio: Float = 9.0 / 16.0
+
+        let effectiveDt: Float
+        if lastUpdateTime > 0 {
+            effectiveDt = Float(min(now - lastUpdateTime, 0.1))
+        } else {
+            effectiveDt = 1.0 / 60.0
+        }
+        lastUpdateTime = now
+
+        updateF(dt: effectiveDt)
+
+        if wasDetected {
+            let elapsed = now - lastDetectTime
+            if elapsed > recenterGrace {
+                applyVelocityDamping(damping: 0.85)
+            }
+
+            predict()
+
+            if elapsed > recenterGrace * 3 {
+                let targetCx = stabWidth / 2.0
+                let targetCy = stabHeight / 2.0
+                let maxCropH = stabHeight
+                let targetW = maxCropH * outputRatio
+                let targetH = maxCropH
+
+                let recenterStrength: Float = 0.02
+                x[0] += (targetCx - x[0]) * recenterStrength
+                x[1] += (targetCy - x[1]) * recenterStrength
+                x[2] += (targetW - x[2]) * recenterStrength
+                x[3] += (targetH - x[3]) * recenterStrength
+                x[4] *= 0.9
+                x[5] *= 0.9
+                x[6] *= 0.9
+                x[7] *= 0.9
+            }
+        }
+
+        predictedCx = x[0]
+        predictedCy = x[1]
+        predictedW = x[2]
+        predictedH = x[3]
+        velocityVx = x[4]
+        velocityVy = x[5]
+        velocityVw = x[6]
+        velocityVh = x[7]
+
+        let smoothCx = x[0]
+        let smoothCy = x[1]
+        let smoothW = x[2]
+        let smoothH = x[3]
+
+        let baseH = max(smoothH, smoothW / outputRatio)
+        let desiredCropH = baseH * (1.0 + targetRatio)
+        let maxCropH = stabHeight
+        let cropH = min(desiredCropH, maxCropH)
+        let cropW = cropH * outputRatio
+
+        let state: String
+        if wasDetected {
+            let elapsed = now - lastDetectTime
+            if elapsed <= recenterGrace {
+                state = "coasting"
+            } else if elapsed <= recenterGrace * 3 {
+                state = "coasting"
+            } else {
+                state = "recenter"
+            }
+        } else {
+            state = "idle"
+        }
+
+        return TrackOutput(
+            cx: smoothCx,
+            cy: smoothCy,
+            cropW: cropW,
+            cropH: cropH,
+            smoothCx: smoothCx,
+            smoothCy: smoothCy,
+            smoothW: smoothW,
+            smoothH: smoothH,
+            detected: false,
+            state: state
+        )
+    }
+
     func reset() {
         let stabW = Float(Config.stabWidth)
         let stabH = Float(Config.stabHeight)

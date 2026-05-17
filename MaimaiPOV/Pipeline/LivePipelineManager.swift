@@ -56,6 +56,8 @@ class LivePipelineManager: ObservableObject {
     var cropRenderer: CropRenderer?
     var kalmanTracker = KalmanTracker()
     var latestTrackOutput: KalmanTracker.TrackOutput?
+    private var pendingDetection: (detected: Bool, stabCx: Float, stabCy: Float, stabW: Float, stabH: Float)?
+    private var pendingDetectionLock = NSLock()
 
     var onStreamBufferAvailable: ((CVPixelBuffer, CMTime) -> Void)?
     var onAudioSampleAvailable: ((CMSampleBuffer, Double) -> Void)?
@@ -171,28 +173,9 @@ class LivePipelineManager: ObservableObject {
                     self.debug.yoloTopBoxes = result.topBoxes
                     self.debug.yoloBestRank = result.bestBoxRank
 
-                    let track = self.kalmanTracker.update(
-                        detected: result.detected,
-                        stabCx: result.stabCx,
-                        stabCy: result.stabCy,
-                        stabW: result.stabW,
-                        stabH: result.stabH,
-                        dt: 0
-                    )
-                    self.latestTrackOutput = track
-                    self.debug.trackCx = track.cx
-                    self.debug.trackCy = track.cy
-                    self.debug.trackCropW = track.cropW
-                    self.debug.trackCropH = track.cropH
-                    self.debug.trackSmoothCx = track.smoothCx
-                    self.debug.trackSmoothCy = track.smoothCy
-                    self.debug.trackSmoothW = track.smoothW
-                    self.debug.trackSmoothH = track.smoothH
-                    self.debug.trackState = track.state
-                    self.debug.kalmanVx = self.kalmanTracker.getVelocityVx()
-                    self.debug.kalmanVy = self.kalmanTracker.getVelocityVy()
-                    self.debug.kalmanVw = self.kalmanTracker.getVelocityVw()
-                    self.debug.kalmanVh = self.kalmanTracker.getVelocityVh()
+                    self.pendingDetectionLock.lock()
+                    self.pendingDetection = (result.detected, result.stabCx, result.stabCy, result.stabW, result.stabH)
+                    self.pendingDetectionLock.unlock()
 
                     if self.yoloPreviewEnabled {
                         yoloPreviewFrameCount += 1
@@ -246,21 +229,64 @@ class LivePipelineManager: ObservableObject {
                     detector.enqueue(stabTexture: stab.outputTexture)
                 }
 
+                self.pendingDetectionLock.lock()
+                let pending = self.pendingDetection
+                self.pendingDetection = nil
+                self.pendingDetectionLock.unlock()
+
+                let track: KalmanTracker.TrackOutput
+                if let det = pending {
+                    track = self.kalmanTracker.update(
+                        detected: det.detected,
+                        stabCx: det.stabCx,
+                        stabCy: det.stabCy,
+                        stabW: det.stabW,
+                        stabH: det.stabH,
+                        dt: 0
+                    )
+                    self.latestTrackOutput = track
+                } else if self.latestTrackOutput != nil {
+                    track = self.kalmanTracker.predictOnly()
+                    self.latestTrackOutput = track
+                } else if let cr = self.cropRenderer {
+                    let fb = cr.makeFallbackTrack()
+                    track = KalmanTracker.TrackOutput(
+                        cx: fb.cx, cy: fb.cy, cropW: fb.cropW, cropH: fb.cropH,
+                        smoothCx: fb.cx, smoothCy: fb.cy, smoothW: fb.cropW, smoothH: fb.cropH,
+                        detected: false, state: "fallback"
+                    )
+                } else {
+                    let stabW = Float(Config.stabWidth)
+                    let stabH = Float(Config.stabHeight)
+                    track = KalmanTracker.TrackOutput(
+                        cx: stabW / 2.0, cy: stabH / 2.0,
+                        cropW: stabH * (9.0 / 16.0), cropH: stabH,
+                        smoothCx: stabW / 2.0, smoothCy: stabH / 2.0,
+                        smoothW: stabH * (9.0 / 16.0), smoothH: stabH,
+                        detected: false, state: "nofallback"
+                    )
+                }
+
+                DispatchQueue.main.async {
+                    self.debug.trackCx = track.cx
+                    self.debug.trackCy = track.cy
+                    self.debug.trackCropW = track.cropW
+                    self.debug.trackCropH = track.cropH
+                    self.debug.trackSmoothCx = track.smoothCx
+                    self.debug.trackSmoothCy = track.smoothCy
+                    self.debug.trackSmoothW = track.smoothW
+                    self.debug.trackSmoothH = track.smoothH
+                    self.debug.trackState = track.state
+                    self.debug.kalmanVx = self.kalmanTracker.getVelocityVx()
+                    self.debug.kalmanVy = self.kalmanTracker.getVelocityVy()
+                    self.debug.kalmanVw = self.kalmanTracker.getVelocityVw()
+                    self.debug.kalmanVh = self.kalmanTracker.getVelocityVh()
+                }
+
                 if let pool = self.ioSurfacePool,
                    let cr = self.cropRenderer,
                    let writeBuffer = pool.nextWriteBuffer() {
                     let timestamp = CMTime(seconds: alignedTime, preferredTimescale: 1000000000)
-                    let track: KalmanTracker.TrackOutput
-                    if let t = self.latestTrackOutput {
-                        track = t
-                    } else {
-                        let fb = cr.makeFallbackTrack()
-                        track = KalmanTracker.TrackOutput(
-                            cx: fb.cx, cy: fb.cy, cropW: fb.cropW, cropH: fb.cropH,
-                            smoothCx: fb.cx, smoothCy: fb.cy, smoothW: fb.cropW, smoothH: fb.cropH,
-                            detected: false, state: "fallback"
-                        )
-                    }
                     cr.process(
                         stabTexture: stab.outputTexture,
                         cx: track.cx, cy: track.cy,

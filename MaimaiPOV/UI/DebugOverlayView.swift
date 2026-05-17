@@ -93,6 +93,7 @@ struct DebugOverlayView: View {
             infoRow("Conf", String(format: "%.2f", debug.yoloConfidence))
             infoRow("Infer", String(format: "%.1fms", debug.yoloInferenceMs))
             infoRow("Prep", String(format: "%.1fms", debug.yoloPreprocessMs))
+            infoRow("Total", String(format: "%.1fms", debug.yoloInferenceMs + debug.yoloPreprocessMs))
             infoRow("Pad", "\(debug.yoloPadding)px")
             infoRow("Raw", debug.yoloRawCoord)
             infoRow("Stab", debug.yoloStabCoord)

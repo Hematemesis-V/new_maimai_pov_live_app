@@ -205,7 +205,14 @@ class KalmanTracker {
 
         if wasDetected {
             let elapsed = now - lastDetectTime
-            if elapsed > recenterGrace {
+
+            if elapsed <= recenterGrace {
+                let trackingDamping: Float = 0.97
+                x[4] *= trackingDamping
+                x[5] *= trackingDamping
+                x[6] *= trackingDamping
+                x[7] *= trackingDamping
+            } else {
                 applyVelocityDamping(damping: 0.85)
             }
 
@@ -303,7 +310,7 @@ class KalmanTracker {
 
     func updateNoiseFromIntuitiveParams() {
         let qPosMapped = lerp(0.05, 120.0, responsiveness)
-        let qVelMapped = lerp(0.005, 40.0, responsiveness)
+        let qVelMapped = lerp(0.005, 5.0, responsiveness)
         let rPosMapped = lerp(0.5, 300.0, smoothness)
         let rSizeMapped = lerp(1.0, 800.0, smoothness)
 

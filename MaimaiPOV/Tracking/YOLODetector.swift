@@ -105,7 +105,7 @@ class YOLODetector {
 
     func enqueue(stabTexture: MTLTexture) {
         let now = CACurrentMediaTime()
-        let minInterval = 1.0 / (max(targetFPS, 1.0) + 2.0)
+        let minInterval = 1.0 / max(targetFPS, 1.0)
         if lastEnqueueTime > 0, now - lastEnqueueTime < minInterval {
             return
         }

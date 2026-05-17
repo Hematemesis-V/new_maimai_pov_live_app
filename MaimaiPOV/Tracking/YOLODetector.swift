@@ -41,6 +41,8 @@ class YOLODetector {
     private var stagingWriteIndex: Int = 0
     private var stagingReadIndex: Int = 0
     private let stagingLock = NSLock()
+    private let frameLock = NSLock()
+    private var hasNewFrame = false
 
     var onDetection: ((DetectionResult) -> Void)?
 
@@ -133,7 +135,9 @@ class YOLODetector {
             self.stagingLock.lock()
             self.stagingReadIndex = writeIdx
             self.stagingLock.unlock()
-            while self.semaphore.wait(timeout: .now()) == .success {}
+            self.frameLock.lock()
+            self.hasNewFrame = true
+            self.frameLock.unlock()
             self.semaphore.signal()
         }
         cmdBuf.commit()
@@ -149,6 +153,13 @@ class YOLODetector {
     private func inferenceLoop() {
         while running {
             semaphore.wait()
+
+            frameLock.lock()
+            let hasFrame = hasNewFrame
+            hasNewFrame = false
+            frameLock.unlock()
+
+            if !hasFrame { continue }
 
             autoreleasepool {
                 stagingLock.lock()

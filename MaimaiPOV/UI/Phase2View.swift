@@ -48,6 +48,11 @@ struct Phase2View: View {
         }
         .onChange(of: pipeline.trackTargetRatio) { _ in pipeline.updateTrackTargetRatio() }
         .onChange(of: pipeline.trackRecenterSpeed) { _ in pipeline.updateTrackRecenterSpeed() }
+        .onChange(of: pipeline.streamManager.isStreaming) { streaming in
+            if streaming {
+                pipeline.debug.isDetailVisible = false
+            }
+        }
         .onDisappear {
             pipeline.stop()
         }

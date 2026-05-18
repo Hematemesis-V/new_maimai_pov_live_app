@@ -12,7 +12,7 @@ class MotionManager {
     static let shared = MotionManager()
 
     private let motionManager = CMMotionManager()
-    private let lock = NSLock()
+    private var unfairLock = os_unfair_lock_s()
     private var headIndex = 0
     private let bufferSize = 512
 
@@ -43,10 +43,10 @@ class MotionManager {
                 quaternion: simd_quatf(ix: Float(q.x), iy: Float(q.y), iz: Float(q.z), r: Float(q.w))
             )
 
-            self.lock.lock()
+            os_unfair_lock_lock(&self.unfairLock)
             self.buffer[self.headIndex] = sample
             self.headIndex = (self.headIndex + 1) % self.bufferSize
-            self.lock.unlock()
+            os_unfair_lock_unlock(&self.unfairLock)
         }
         print("MotionManager: Started at 100Hz")
     }
@@ -57,29 +57,41 @@ class MotionManager {
     }
 
     func getQuaternion(at targetTime: Double) -> simd_quatf? {
-        lock.lock()
-        defer { lock.unlock() }
+        os_unfair_lock_lock(&unfairLock)
+        defer { os_unfair_lock_unlock(&unfairLock) }
 
-        var sample1: MotionSample?
-        var sample2: MotionSample?
+        let n = bufferSize
 
-        for i in 0..<bufferSize {
-            let idx = ((headIndex - 1 - i) + bufferSize) % bufferSize
-            let s = buffer[idx]
-            if s.timestamp == 0 { continue }
+        var low = 0
+        var high = n - 1
 
-            if s.timestamp <= targetTime {
-                sample1 = s
-                let nextIdx = (idx + 1) % bufferSize
-                sample2 = buffer[nextIdx]
-                break
+        while low <= high && buffer[(headIndex + low) % n].timestamp == 0 {
+            low += 1
+        }
+        if low > high { return nil }
+
+        let oldestTime = buffer[(headIndex + low) % n].timestamp
+        let newestTime = buffer[(headIndex + high) % n].timestamp
+        if targetTime < oldestTime || targetTime > newestTime { return nil }
+
+        var result = low
+        while low <= high {
+            let mid = low + (high - low) / 2
+            let midTime = buffer[(headIndex + mid) % n].timestamp
+            if midTime <= targetTime {
+                result = mid
+                low = mid + 1
+            } else {
+                high = mid - 1
             }
         }
 
-        guard let s1 = sample1, let s2 = sample2, s2.timestamp > s1.timestamp else {
-            return nil
-        }
+        let idx1 = (headIndex + result) % n
+        let idx2 = (idx1 + 1) % n
+        let s1 = buffer[idx1]
+        let s2 = buffer[idx2]
 
+        guard s2.timestamp > s1.timestamp else { return nil }
         let dt = s2.timestamp - s1.timestamp
         guard dt > 0, dt < 0.1 else { return nil }
 
@@ -89,10 +101,9 @@ class MotionManager {
         return simd_slerp(s1.quaternion, s2.quaternion, clampedRatio)
     }
 
-    /// Returns the most recent quaternion (no interpolation).
     func latestQuaternion() -> simd_quatf? {
-        lock.lock()
-        defer { lock.unlock() }
+        os_unfair_lock_lock(&unfairLock)
+        defer { os_unfair_lock_unlock(&unfairLock) }
         let idx = (headIndex - 1 + bufferSize) % bufferSize
         let s = buffer[idx]
         return s.timestamp > 0 ? s.quaternion : nil

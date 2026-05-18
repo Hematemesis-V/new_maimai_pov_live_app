@@ -2,9 +2,10 @@ import SwiftUI
 
 struct DebugOverlayView: View {
     @ObservedObject var debug: DebugInfoManager
-    @State private var isCollapsed = false
     @State private var dragOffset: CGSize = .zero
     @State private var showLog = false
+
+    private var isCollapsed: Bool { !debug.isDetailVisible }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -64,8 +65,7 @@ struct DebugOverlayView: View {
 
             Button {
                 withAnimation(.easeInOut(duration: 0.15)) {
-                    isCollapsed.toggle()
-                    debug.isDetailVisible = !isCollapsed
+                    debug.isDetailVisible.toggle()
                 }
             } label: {
                 Image(systemName: isCollapsed ? "arrow.up.right.and.arrow.down.left" : "minus")

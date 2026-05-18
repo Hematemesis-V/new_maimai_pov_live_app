@@ -97,8 +97,12 @@ class YOLOPreprocessor {
         encoder.dispatchThreads(gridSize, threadsPerThreadgroup: tgSize)
         encoder.endEncoding()
 
+        let sem = DispatchSemaphore(value: 0)
+        cmdBuf.addCompletedHandler { _ in
+            sem.signal()
+        }
         cmdBuf.commit()
-        cmdBuf.waitUntilCompleted()
+        sem.wait()
 
         return pixelBuffer
     }

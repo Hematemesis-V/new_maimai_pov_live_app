@@ -14,6 +14,7 @@ class MetalStabilizer {
     private(set) var outputTexture: MTLTexture
 
     private var lastCommandBuffer: MTLCommandBuffer?
+    private var completionSemaphore: DispatchSemaphore?
 
     var anchorQuaternion: simd_quatf?
     var lensConfig: LensConfig
@@ -180,12 +181,17 @@ class MetalStabilizer {
         encoder.dispatchThreads(gridSize, threadsPerThreadgroup: tgSize)
         encoder.endEncoding()
 
+        let sem = DispatchSemaphore(value: 0)
+        cmdBuf.addCompletedHandler { _ in
+            sem.signal()
+        }
         cmdBuf.commit()
-        lastCommandBuffer = cmdBuf
+        completionSemaphore = sem
     }
 
     func waitForCompletion() {
-        lastCommandBuffer?.waitUntilCompleted()
+        completionSemaphore?.wait()
+        completionSemaphore = nil
     }
 
     private func metalTexture(

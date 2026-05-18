@@ -92,12 +92,14 @@ class LivePipelineManager: ObservableObject {
             self?.objectWillChange.send()
         }.store(in: &cancellables)
 
-        debug.objectWillChange.sink { [weak self] _ in
+        streamManager.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
         }.store(in: &cancellables)
 
-        streamManager.objectWillChange.sink { [weak self] _ in
-            self?.objectWillChange.send()
+        streamManager.$isStreaming.sink { [weak self] streaming in
+            DispatchQueue.main.async {
+                self?.debug.isStreaming = streaming
+            }
         }.store(in: &cancellables)
     }
 
@@ -189,7 +191,7 @@ class LivePipelineManager: ObservableObject {
 
                     if self.yoloPreviewEnabled {
                         self.yoloPreviewFrameCount += 1
-                        if self.yoloPreviewFrameCount % 10 == 0,
+                        if self.yoloPreviewFrameCount % 30 == 0,
                            let pb = self.yoloDetector?.previewPixelBuffer {
                             let ciImage = CIImage(cvPixelBuffer: pb)
                             if let cgImage = self.ciContext.createCGImage(ciImage, from: ciImage.extent) {
@@ -217,37 +219,34 @@ class LivePipelineManager: ObservableObject {
 
                 let resultCopy = detectionResult
                 let previewEnabled = self.yoloPreviewEnabled
-                let detailVisible = self.debug.isDetailVisible
                 DispatchQueue.main.async {
+                    var snapshot = DebugInfoManager.FrameDebugData()
                     if let result = resultCopy {
-                        self.debug.yoloDetected = result.detected
-                        self.debug.yoloConfidence = result.confidence
-                        self.debug.yoloInferenceMs = result.inferenceMs
-                        self.debug.yoloPreprocessMs = result.preprocessMs
-                        if detailVisible {
-                            self.debug.yoloRawCoord = result.detected
-                                ? String(format: "%.0f,%.0f,%.0f,%.0f",
-                                    result.rawYoloCx, result.rawYoloCy, result.rawYoloW, result.rawYoloH)
-                                : "--"
-                            self.debug.yoloStabCoord = result.detected
-                                ? String(format: "%.0f,%.0f,%.0f,%.0f",
-                                    result.stabCx, result.stabCy, result.stabW, result.stabH)
-                                : "--"
-                            self.debug.yoloBoxesInfo = "\(result.innerScreenBoxesCount)/\(result.allBoxesCount)"
-                            self.debug.yoloTopBoxes = result.topBoxes
-                        }
-                        self.debug.yoloStabCx = result.stabCx
-                        self.debug.yoloStabCy = result.stabCy
-                        self.debug.yoloStabW = result.stabW
-                        self.debug.yoloStabH = result.stabH
-                        self.debug.yoloBestRank = result.bestBoxRank
-                        self.debug.yoloPreviewImage = previewEnabled ? yoloPreviewImage : nil
+                        snapshot.hasYoloResult = true
+                        snapshot.yoloDetected = result.detected
+                        snapshot.yoloConfidence = result.confidence
+                        snapshot.yoloInferenceMs = result.inferenceMs
+                        snapshot.yoloPreprocessMs = result.preprocessMs
+                        snapshot.rawYoloCx = result.rawYoloCx
+                        snapshot.rawYoloCy = result.rawYoloCy
+                        snapshot.rawYoloW = result.rawYoloW
+                        snapshot.rawYoloH = result.rawYoloH
+                        snapshot.stabCx = result.stabCx
+                        snapshot.stabCy = result.stabCy
+                        snapshot.stabW = result.stabW
+                        snapshot.stabH = result.stabH
+                        snapshot.innerScreenBoxesCount = result.innerScreenBoxesCount
+                        snapshot.allBoxesCount = result.allBoxesCount
+                        snapshot.topBoxes = result.topBoxes
+                        snapshot.bestBoxRank = result.bestBoxRank
+                        snapshot.yoloPreviewImage = previewEnabled ? yoloPreviewImage : nil
                     }
-                    self.debug.trackCx = track.cx
-                    self.debug.trackCy = track.cy
-                    self.debug.trackCropW = track.cropW
-                    self.debug.trackCropH = track.cropH
-                    self.debug.trackState = track.state
+                    snapshot.trackCx = track.cx
+                    snapshot.trackCy = track.cy
+                    snapshot.trackCropW = track.cropW
+                    snapshot.trackCropH = track.cropH
+                    snapshot.trackState = track.state
+                    self.debug.stageFrameData(snapshot)
                 }
 
                 if let pool = self.ioSurfacePool,
@@ -268,8 +267,7 @@ class LivePipelineManager: ObservableObject {
                             self.streamManager.appendVideo(pixelBuffer: writeBuffer.pixelBuffer, timestamp: timestamp)
                             DispatchQueue.main.async {
                                 self.lagMs = pipelineLatencyMs
-                                self.debug.pipelineLagMs = pipelineLatencyMs
-                                self.debug.audioQueueDepth = self.streamManager.audioSyncQueueDepth
+                                self.debug.stageLagData(ms: pipelineLatencyMs, audioDepth: self.streamManager.audioSyncQueueDepth)
                             }
                         }
                     }
@@ -287,7 +285,7 @@ class LivePipelineManager: ObservableObject {
                     let pipelineLatencyMs = (CACurrentMediaTime() - pipelineEnterTime) * 1000.0
                     DispatchQueue.main.async {
                         self.lagMs = pipelineLatencyMs
-                        self.debug.pipelineLagMs = pipelineLatencyMs
+                        self.debug.stageLagData(ms: pipelineLatencyMs, audioDepth: 0)
                     }
                 }
             }
@@ -300,6 +298,7 @@ class LivePipelineManager: ObservableObject {
 
         startFPSTimer()
         startTemperatureTimer()
+        debug.startFlushTimer()
     }
 
     func stop() {
@@ -308,6 +307,7 @@ class LivePipelineManager: ObservableObject {
         MotionManager.shared.stopUpdates()
         stopFPSTimer()
         stopTemperatureTimer()
+        debug.stopFlushTimer()
     }
 
     private func startFPSTimer() {

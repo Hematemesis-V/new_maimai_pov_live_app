@@ -238,6 +238,7 @@ struct Phase2View: View {
                     }
                 }
                 .padding(.vertical, 8)
+                .padding(.bottom, bottomSafeArea)
                 .background(Color.black.opacity(0.3))
             }
         }
@@ -683,6 +684,11 @@ struct Phase2View: View {
     }
 
     // MARK: - Helpers
+
+    private var bottomSafeArea: CGFloat {
+        (UIApplication.shared.connectedScenes.first as? UIWindowScene)?
+            .windows.first?.safeAreaInsets.bottom ?? 0
+    }
 
     private func clamp(_ value: Float, _ min: Float, _ max: Float) -> Float {
         Swift.min(Swift.max(value, min), max)

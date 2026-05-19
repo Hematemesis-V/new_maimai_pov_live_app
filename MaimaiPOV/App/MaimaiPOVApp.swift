@@ -19,22 +19,30 @@ struct MaimaiPOVApp: App {
                   let window = windowScene.windows.first,
                   let rootVC = window.rootViewController else { return }
 
+            let childVC = EdgeProtectChildVC()
+            rootVC.addChild(childVC)
+            childVC.view.frame = .zero
+            childVC.view.isUserInteractionEnabled = false
+            rootVC.view.addSubview(childVC.view)
+            childVC.didMove(toParent: rootVC)
+
             let cls: AnyClass = object_getClass(rootVC)!
 
-            let homeSelector = sel_registerName("prefersHomeIndicatorAutoHidden")
-            if let method = class_getInstanceMethod(cls, homeSelector) {
-                let block: @convention(block) (AnyObject) -> Bool = { _ in true }
-                method_setImplementation(method, imp_implementationWithBlock(block))
-            }
+            let childHomeSel = sel_registerName("childViewControllerForHomeIndicatorAutoHidden")
+            let childHomeBlock: @convention(block) (AnyObject) -> AnyObject? = { [weak childVC] _ in childVC }
+            class_replaceMethod(cls, childHomeSel, imp_implementationWithBlock(childHomeBlock), "@@:")
 
-            let deferSelector = sel_registerName("preferredScreenEdgesDeferringSystemGestures")
-            if let method = class_getInstanceMethod(cls, deferSelector) {
-                let block: @convention(block) (AnyObject) -> UInt = { _ in UIRectEdge.bottom.rawValue }
-                method_setImplementation(method, imp_implementationWithBlock(block))
-            }
+            let childDeferSel = sel_registerName("childForScreenEdgesDeferringSystemGestures")
+            let childDeferBlock: @convention(block) (AnyObject) -> AnyObject? = { [weak childVC] _ in childVC }
+            class_replaceMethod(cls, childDeferSel, imp_implementationWithBlock(childDeferBlock), "@@:")
 
             rootVC.setNeedsUpdateOfHomeIndicatorAutoHidden()
             rootVC.setNeedsUpdateOfScreenEdgesDeferringSystemGestures()
         }
     }
+}
+
+private class EdgeProtectChildVC: UIViewController {
+    override var prefersHomeIndicatorAutoHidden: Bool { true }
+    override var preferredScreenEdgesDeferringSystemGestures: UIRectEdge { .bottom }
 }

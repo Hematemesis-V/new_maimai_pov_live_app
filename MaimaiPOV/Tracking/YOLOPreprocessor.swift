@@ -13,6 +13,8 @@ class YOLOPreprocessor {
     private var pixelBuffers: [CVPixelBuffer] = []
     private var outputTextures: [MTLTexture] = []
     private var bufferIndex: Int = 0
+    private var cachedStabTexture: MTLTexture?
+    private var cachedOutputTexture: MTLTexture?
 
     let yoloSize: Int
 
@@ -87,14 +89,7 @@ class YOLOPreprocessor {
         guard let cmdBuf = commandQueue.makeCommandBuffer(),
               let encoder = cmdBuf.makeComputeCommandEncoder() else { return nil }
 
-        encoder.setComputePipelineState(pipelineState)
-        encoder.setTexture(stabOutputTexture, index: 0)
-        encoder.setTexture(outputTexture, index: 1)
-        encoder.setBuffer(uniformsBuffer, offset: 0, index: 0)
-
-        let tgSize = MTLSize(width: 16, height: 16, depth: 1)
-        let gridSize = MTLSize(width: yoloSize, height: yoloSize, depth: 1)
-        encoder.dispatchThreads(gridSize, threadsPerThreadgroup: tgSize)
+        encodeKernel(into: encoder, stabOutputTexture: stabOutputTexture)
         encoder.endEncoding()
 
         let sem = DispatchSemaphore(value: 0)
@@ -105,5 +100,31 @@ class YOLOPreprocessor {
         sem.wait()
 
         return pixelBuffer
+    }
+
+    func encode(into encoder: MTLComputeCommandEncoder, stabOutputTexture: MTLTexture) -> CVPixelBuffer? {
+        bufferIndex = (bufferIndex + 1) % pixelBuffers.count
+        let outputTexture = outputTextures[bufferIndex]
+        let pixelBuffer = pixelBuffers[bufferIndex]
+
+        cachedStabTexture = stabOutputTexture
+        cachedOutputTexture = outputTexture
+
+        encodeKernel(into: encoder, stabOutputTexture: stabOutputTexture)
+
+        return pixelBuffer
+    }
+
+    private func encodeKernel(into encoder: MTLComputeCommandEncoder, stabOutputTexture: MTLTexture) {
+        let outputTexture = outputTextures[bufferIndex]
+
+        encoder.setComputePipelineState(pipelineState)
+        encoder.setTexture(stabOutputTexture, index: 0)
+        encoder.setTexture(outputTexture, index: 1)
+        encoder.setBuffer(uniformsBuffer, offset: 0, index: 0)
+
+        let tgSize = MTLSize(width: 16, height: 16, depth: 1)
+        let gridSize = MTLSize(width: yoloSize, height: yoloSize, depth: 1)
+        encoder.dispatchThreads(gridSize, threadsPerThreadgroup: tgSize)
     }
 }

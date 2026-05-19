@@ -13,6 +13,9 @@ class MetalStabilizer {
     private var textureCache: CVMetalTextureCache
     private(set) var outputTexture: MTLTexture
 
+    private var cachedYTexture: MTLTexture?
+    private var cachedCbcrTexture: MTLTexture?
+
     private var lastCommandBuffer: MTLCommandBuffer?
     private var completionSemaphore: DispatchSemaphore?
 
@@ -137,7 +140,39 @@ class MetalStabilizer {
         qBottom: simd_quatf
     ) {
         guard stabilizerEnabled else { return }
+        guard prepareUniforms(pixelBuffer: pixelBuffer, qCenter: qCenter, qTop: qTop, qBottom: qBottom),
+              let cmdBuf = commandQueue.makeCommandBuffer(),
+              let encoder = cmdBuf.makeComputeCommandEncoder() else { return }
 
+        encodeKernel(into: encoder)
+        encoder.endEncoding()
+
+        let sem = DispatchSemaphore(value: 0)
+        cmdBuf.addCompletedHandler { _ in
+            sem.signal()
+        }
+        cmdBuf.commit()
+        completionSemaphore = sem
+    }
+
+    func encode(
+        into encoder: MTLComputeCommandEncoder,
+        pixelBuffer: CVPixelBuffer,
+        qCenter: simd_quatf,
+        qTop: simd_quatf,
+        qBottom: simd_quatf
+    ) {
+        guard stabilizerEnabled else { return }
+        guard prepareUniforms(pixelBuffer: pixelBuffer, qCenter: qCenter, qTop: qTop, qBottom: qBottom) else { return }
+        encodeKernel(into: encoder)
+    }
+
+    private func prepareUniforms(
+        pixelBuffer: CVPixelBuffer,
+        qCenter: simd_quatf,
+        qTop: simd_quatf,
+        qBottom: simd_quatf
+    ) -> Bool {
         let qc = Self.alignIMU(qCenter)
         let qt = Self.alignIMU(qTop)
         let qb = Self.alignIMU(qBottom)
@@ -158,17 +193,20 @@ class MetalStabilizer {
 
         guard let yTexture = metalTexture(from: pixelBuffer, planeIndex: 0, format: .r8Unorm),
               let cbcrTexture = metalTexture(from: pixelBuffer, planeIndex: 1, format: .rg8Unorm) else {
-            return
+            return false
         }
 
         memcpy(uniformsBuffer.contents(), &uniforms, MemoryLayout<StabilizerUniforms>.stride)
 
-        guard let cmdBuf = commandQueue.makeCommandBuffer(),
-              let encoder = cmdBuf.makeComputeCommandEncoder() else { return }
+        cachedYTexture = yTexture
+        cachedCbcrTexture = cbcrTexture
+        return true
+    }
 
+    private func encodeKernel(into encoder: MTLComputeCommandEncoder) {
         encoder.setComputePipelineState(pipelineState)
-        encoder.setTexture(yTexture, index: 0)
-        encoder.setTexture(cbcrTexture, index: 1)
+        encoder.setTexture(cachedYTexture!, index: 0)
+        encoder.setTexture(cachedCbcrTexture!, index: 1)
         encoder.setTexture(outputTexture, index: 2)
         encoder.setBuffer(uniformsBuffer, offset: 0, index: 0)
 
@@ -179,14 +217,6 @@ class MetalStabilizer {
             depth: 1
         )
         encoder.dispatchThreads(gridSize, threadsPerThreadgroup: tgSize)
-        encoder.endEncoding()
-
-        let sem = DispatchSemaphore(value: 0)
-        cmdBuf.addCompletedHandler { _ in
-            sem.signal()
-        }
-        cmdBuf.commit()
-        completionSemaphore = sem
     }
 
     func waitForCompletion() {

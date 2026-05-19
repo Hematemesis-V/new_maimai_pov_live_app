@@ -150,8 +150,11 @@ class LivePipelineManager: ObservableObject {
 
         camera.checkPermissionAndStart()
         camera.switchLens(to: selectedLens)
-        camera.setFocus(Float(focusValue))
-        applyExposure()
+        camera.onDeviceReady = { [weak self] in
+            guard let self else { return }
+            self.camera.setFocus(Float(self.focusValue))
+            self.applyExposure()
+        }
         MotionManager.shared.startUpdates()
 
         camera.onVideoFrame = { [weak self] pixelBuffer, alignedTime in
@@ -169,12 +172,52 @@ class LivePipelineManager: ObservableObject {
                       let qTop    = MotionManager.shared.getQuaternion(at: topTime),
                       let qBottom = MotionManager.shared.getQuaternion(at: bottomTime) else { return }
 
-                stab.process(pixelBuffer: pixelBuffer, qCenter: qCenter, qTop: qTop, qBottom: qBottom)
-                stab.waitForCompletion()
-
                 var detectionResult: YOLODetector.DetectionResult?
+
                 if self.yoloEnabled, let detector = self.yoloDetector {
-                    detectionResult = detector.detect(stabTexture: stab.outputTexture)
+                    let shouldRunYOLO = detector.advanceSkipCounter()
+
+                    if shouldRunYOLO {
+                        let prepStart = CACurrentMediaTime()
+
+                        guard let cmdBuf = self.sharedCommandQueue.makeCommandBuffer(),
+                              let encoder = cmdBuf.makeComputeCommandEncoder() else {
+                            stab.process(pixelBuffer: pixelBuffer, qCenter: qCenter, qTop: qTop, qBottom: qBottom)
+                            stab.waitForCompletion()
+                            return
+                        }
+
+                        stab.encode(into: encoder, pixelBuffer: pixelBuffer, qCenter: qCenter, qTop: qTop, qBottom: qBottom)
+
+                        if let yoloPixelBuffer = detector.preprocessor.encode(into: encoder, stabOutputTexture: stab.outputTexture) {
+                            encoder.endEncoding()
+
+                            let sem = DispatchSemaphore(value: 0)
+                            cmdBuf.addCompletedHandler { _ in
+                                sem.signal()
+                            }
+                            cmdBuf.commit()
+                            sem.wait()
+
+                            let prepElapsed = (CACurrentMediaTime() - prepStart) * 1000.0
+                            detectionResult = detector.detectWithPreprocessedPixelBuffer(yoloPixelBuffer, preprocessMs: prepElapsed)
+                        } else {
+                            encoder.endEncoding()
+
+                            let sem = DispatchSemaphore(value: 0)
+                            cmdBuf.addCompletedHandler { _ in
+                                sem.signal()
+                            }
+                            cmdBuf.commit()
+                            sem.wait()
+                        }
+                    } else {
+                        stab.process(pixelBuffer: pixelBuffer, qCenter: qCenter, qTop: qTop, qBottom: qBottom)
+                        stab.waitForCompletion()
+                    }
+                } else {
+                    stab.process(pixelBuffer: pixelBuffer, qCenter: qCenter, qTop: qTop, qBottom: qBottom)
+                    stab.waitForCompletion()
                 }
 
                 var yoloPreviewImage: UIImage?
@@ -341,6 +384,11 @@ class LivePipelineManager: ObservableObject {
         camera.switchLens(to: newLens)
         reconfigureLens()
         debug.lensType = newLens.rawValue
+        camera.onDeviceReady = { [weak self] in
+            guard let self else { return }
+            self.camera.setFocus(Float(self.focusValue))
+            self.applyExposure()
+        }
     }
 
     func reconfigureLens() {
@@ -355,6 +403,7 @@ class LivePipelineManager: ObservableObject {
         Config.focusValue = focusValue
         Config.shutterTimescale = shutterTimescale
         Config.isoValue = isoValue
+        camera.setFocus(Float(focusValue))
         guard camera.exposureMode == .custom else { return }
         camera.setExposure(duration: CMTime(value: 1, timescale: Int32(shutterTimescale)), iso: Float(isoValue))
     }

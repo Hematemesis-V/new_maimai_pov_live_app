@@ -21,6 +21,7 @@ class CameraCaptureManager: NSObject, ObservableObject {
 
     var onVideoFrame: ((CVPixelBuffer, Double) -> Void)?
     var onAudioSample: ((CMSampleBuffer, Double) -> Void)?
+    var onDeviceReady: (() -> Void)?
 
     private var masterClock: CMClock?
     private let hostClock = CMClockGetHostTimeClock()
@@ -137,7 +138,6 @@ class CameraCaptureManager: NSObject, ObservableObject {
 
         configureExposure(for: device)
 
-        // Audio setup (once)
         if !session.outputs.contains(where: { $0 is AVCaptureAudioDataOutput }) {
             guard let audioDevice = AVCaptureDevice.default(for: .audio),
                   let audioInput = try? AVCaptureDeviceInput(device: audioDevice),
@@ -154,6 +154,8 @@ class CameraCaptureManager: NSObject, ObservableObject {
             session.addOutput(audioOutput)
             audioOutput.setSampleBufferDelegate(self, queue: sessionQueue)
         }
+
+        DispatchQueue.main.async { self.onDeviceReady?() }
     }
 
     private func configureAudioSession() {
@@ -226,6 +228,9 @@ class CameraCaptureManager: NSObject, ObservableObject {
             let clampedISO = min(max(currentISO, Float(device.activeFormat.minISO)), Float(device.activeFormat.maxISO))
             device.setExposureModeCustom(duration: currentDuration, iso: clampedISO, completionHandler: nil)
             currentISO = clampedISO
+            if device.isFocusModeSupported(.locked) {
+                device.setFocusModeLocked(lensPosition: Float(Config.focusValue), completionHandler: nil)
+            }
             device.unlockForConfiguration()
             DispatchQueue.main.async { self.exposureMode = .custom }
         } catch {

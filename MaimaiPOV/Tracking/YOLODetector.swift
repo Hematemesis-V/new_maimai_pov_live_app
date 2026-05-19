@@ -33,7 +33,7 @@ class YOLODetector {
     private let preprocessor: YOLOPreprocessor
 
     var targetFPS: Double = Config.yoloTargetFPS
-    private var frameSkipCounter: Int = 0
+    private(set) var frameSkipCounter: Int = 0
     private var inferenceCount: Int = 0
     private var inferenceCountStartTime: Double = 0
     private(set) var actualFPS: Double = 0
@@ -42,6 +42,8 @@ class YOLODetector {
     var previewPixelBuffer: CVPixelBuffer? {
         return lastPixelBuffer
     }
+
+    private(set) var preprocessor: YOLOPreprocessor
 
     init?(device: MTLDevice, commandQueue: MTLCommandQueue) {
         let config = MLModelConfiguration()
@@ -74,6 +76,25 @@ class YOLODetector {
             updateActualFPS()
         }
         return result
+    }
+
+    func detectWithPreprocessedPixelBuffer(_ pixelBuffer: CVPixelBuffer, preprocessMs: Double) -> DetectionResult? {
+        lastPixelBuffer = pixelBuffer
+        let result = infer(pixelBuffer, preprocessMs: preprocessMs)
+        if result != nil {
+            updateActualFPS()
+        }
+        return result
+    }
+
+    func advanceSkipCounter() -> Bool {
+        let skip = max(1, Int(round(60.0 / max(targetFPS, 1.0))))
+        frameSkipCounter += 1
+        if frameSkipCounter >= skip {
+            frameSkipCounter = 0
+            return true
+        }
+        return false
     }
 
     func updatePadding(_ padding: Int) {

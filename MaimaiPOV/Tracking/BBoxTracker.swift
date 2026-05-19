@@ -36,8 +36,7 @@ class BBoxTracker {
         if detected {
             let baseH = max(stabH, stabW / outputRatio)
             let desiredCropH = baseH * (1.0 + targetRatio)
-            let maxCropH = stabHeight
-            let cropH = min(desiredCropH, maxCropH)
+            let cropH = desiredCropH
             let cropW = cropH * outputRatio
 
             lastCx = stabCx

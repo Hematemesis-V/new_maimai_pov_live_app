@@ -122,7 +122,7 @@ enum Config {
         }
         set { UserDefaults.standard.set(newValue, forKey: trackRecenterSpeedKey) }
     }
-    static let defaultConfidenceThreshold: Float = 0.8
+    static let defaultConfidenceThreshold: Float = 0.6
 
     // Stabilizer defaults
     static let defaultFov: Float = 100.0

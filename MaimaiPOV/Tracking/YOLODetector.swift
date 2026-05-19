@@ -30,7 +30,7 @@ class YOLODetector {
 
     private let model: best
     private var uniforms: YOLOPreprocessUniforms
-    private let preprocessor: YOLOPreprocessor
+    private(set) var preprocessor: YOLOPreprocessor
 
     var targetFPS: Double = Config.yoloTargetFPS
     private(set) var frameSkipCounter: Int = 0
@@ -42,8 +42,6 @@ class YOLODetector {
     var previewPixelBuffer: CVPixelBuffer? {
         return lastPixelBuffer
     }
-
-    private(set) var preprocessor: YOLOPreprocessor
 
     init?(device: MTLDevice, commandQueue: MTLCommandQueue) {
         let config = MLModelConfiguration()

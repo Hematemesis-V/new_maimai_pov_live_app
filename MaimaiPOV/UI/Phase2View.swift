@@ -42,8 +42,6 @@ struct Phase2View: View {
 
             controlPanel
         }
-        .statusBarHidden(true)
-        .persistentSystemOverlays(.hidden)
         .preferredColorScheme(.dark)
         .background(Color.black)
         .onAppear {

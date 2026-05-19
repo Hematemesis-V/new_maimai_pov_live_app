@@ -6,7 +6,8 @@ struct MaimaiPOVApp: App {
 
     var body: some Scene {
         WindowGroup {
-            EmptyView()
+            Phase2View()
         }
+        .defaultSize(.init(width: 393, height: 852))
     }
 }

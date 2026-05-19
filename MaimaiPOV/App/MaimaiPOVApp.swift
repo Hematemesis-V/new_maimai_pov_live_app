@@ -19,13 +19,22 @@ struct MaimaiPOVApp: App {
                   let window = windowScene.windows.first,
                   let rootVC = window.rootViewController else { return }
 
-            let selector = sel_registerName("prefersHomeIndicatorAutoHidden")
-            if let method = class_getInstanceMethod(object_getClass(rootVC), selector) {
+            let cls: AnyClass = object_getClass(rootVC)!
+
+            let homeSelector = sel_registerName("prefersHomeIndicatorAutoHidden")
+            if let method = class_getInstanceMethod(cls, homeSelector) {
                 let block: @convention(block) (AnyObject) -> Bool = { _ in true }
                 method_setImplementation(method, imp_implementationWithBlock(block))
             }
 
+            let deferSelector = sel_registerName("preferredScreenEdgesDeferringSystemGestures")
+            if let method = class_getInstanceMethod(cls, deferSelector) {
+                let block: @convention(block) (AnyObject) -> UInt = { _ in UIRectEdge.bottom.rawValue }
+                method_setImplementation(method, imp_implementationWithBlock(block))
+            }
+
             rootVC.setNeedsUpdateOfHomeIndicatorAutoHidden()
+            rootVC.setNeedsUpdateOfScreenEdgesDeferringSystemGestures()
         }
     }
 }

@@ -84,6 +84,7 @@ class LivePipelineManager: ObservableObject {
     private var temperatureTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
     private var yoloPreviewFrameCount: Int = 0
+    private var lastStabOnlyMs: Double = 0
 
     init() {
         sharedCommandQueue = device.makeCommandQueue()!
@@ -178,7 +179,7 @@ class LivePipelineManager: ObservableObject {
                     let shouldRunYOLO = detector.advanceSkipCounter()
 
                     if shouldRunYOLO {
-                        let prepStart = CACurrentMediaTime()
+                        let combinedStart = CACurrentMediaTime()
 
                         guard let cmdBuf = self.sharedCommandQueue.makeCommandBuffer(),
                               let encoder = cmdBuf.makeComputeCommandEncoder() else {
@@ -199,8 +200,9 @@ class LivePipelineManager: ObservableObject {
                             cmdBuf.commit()
                             sem.wait()
 
-                            let prepElapsed = (CACurrentMediaTime() - prepStart) * 1000.0
-                            detectionResult = detector.detectWithPreprocessedPixelBuffer(yoloPixelBuffer, preprocessMs: prepElapsed)
+                            let combinedMs = (CACurrentMediaTime() - combinedStart) * 1000.0
+                            let yoloPrepMs = max(combinedMs - self.lastStabOnlyMs, 0)
+                            detectionResult = detector.detectWithPreprocessedPixelBuffer(yoloPixelBuffer, preprocessMs: yoloPrepMs)
                         } else {
                             encoder.endEncoding()
 
@@ -212,8 +214,10 @@ class LivePipelineManager: ObservableObject {
                             sem.wait()
                         }
                     } else {
+                        let stabStart = CACurrentMediaTime()
                         stab.process(pixelBuffer: pixelBuffer, qCenter: qCenter, qTop: qTop, qBottom: qBottom)
                         stab.waitForCompletion()
+                        self.lastStabOnlyMs = (CACurrentMediaTime() - stabStart) * 1000.0
                     }
                 } else {
                     stab.process(pixelBuffer: pixelBuffer, qCenter: qCenter, qTop: qTop, qBottom: qBottom)

@@ -74,6 +74,11 @@ struct Phase2View: View {
         }
         .onChange(of: pipeline.trackTargetRatio) { _ in pipeline.updateTrackTargetRatio() }
         .onChange(of: pipeline.trackRecenterSpeed) { _ in pipeline.updateTrackRecenterSpeed() }
+        .onChange(of: pipeline.smoothingEnabled) { _ in pipeline.updateSmoothingEnabled() }
+        .onChange(of: pipeline.smoothingBaseAlpha) { _ in pipeline.updateSmoothingBaseAlpha() }
+        .onChange(of: pipeline.smoothingMinDeviation) { _ in pipeline.updateSmoothingMinDeviation() }
+        .onChange(of: pipeline.smoothingMaxDeviation) { _ in pipeline.updateSmoothingMaxDeviation() }
+        .onChange(of: pipeline.smoothingCenterFloor) { _ in pipeline.updateSmoothingCenterFloor() }
         .onChange(of: pipeline.streamManager.isStreaming) { streaming in
             if streaming {
                 pipeline.debug.isDetailVisible = false
@@ -289,6 +294,10 @@ struct Phase2View: View {
                     yoloTargetFPSRow
                     trackTargetRatioRow
                     trackRecenterSpeedRow
+                    smoothingToggleRow
+                    smoothingBaseAlphaRow
+                    smoothingDeviationRow
+                    smoothingCenterFloorRow
                 }
             }
         }
@@ -567,6 +576,51 @@ struct Phase2View: View {
         } valueLabel: {
             Text(String(format: "%.2f", pipeline.trackRecenterSpeed)).font(.caption).foregroundColor(.gray).frame(width: 40, alignment: .trailing)
         }
+    }
+
+    private var smoothingToggleRow: some View {
+        HStack {
+            Text("Smooth").font(.caption).frame(width: 55, alignment: .leading)
+            Toggle("", isOn: $pipeline.smoothingEnabled).labelsHidden()
+            Spacer()
+            Text(pipeline.smoothingEnabled ? "ON" : "OFF")
+                .font(.caption2)
+                .foregroundColor(pipeline.smoothingEnabled ? .green : .red)
+        }
+    }
+
+    private var smoothingBaseAlphaRow: some View {
+        labeledRow("Alpha") {
+            Slider(value: $pipeline.smoothingBaseAlpha, in: 0.05...1.0, step: 0.05)
+        } valueLabel: {
+            Text(String(format: "%.2f", pipeline.smoothingBaseAlpha)).font(.caption).foregroundColor(.gray).frame(width: 40, alignment: .trailing)
+        }
+        .disabled(!pipeline.smoothingEnabled)
+    }
+
+    private var smoothingDeviationRow: some View {
+        Group {
+            labeledRow("MinDev") {
+                Slider(value: $pipeline.smoothingMinDeviation, in: 0.0...0.1, step: 0.005)
+            } valueLabel: {
+                Text(String(format: "%.3f", pipeline.smoothingMinDeviation)).font(.caption).foregroundColor(.gray).frame(width: 40, alignment: .trailing)
+            }
+            labeledRow("MaxDev") {
+                Slider(value: $pipeline.smoothingMaxDeviation, in: 0.0...0.15, step: 0.005)
+            } valueLabel: {
+                Text(String(format: "%.3f", pipeline.smoothingMaxDeviation)).font(.caption).foregroundColor(.gray).frame(width: 40, alignment: .trailing)
+            }
+        }
+        .disabled(!pipeline.smoothingEnabled)
+    }
+
+    private var smoothingCenterFloorRow: some View {
+        labeledRow("CFloor") {
+            Slider(value: $pipeline.smoothingCenterFloor, in: 0.0...1.0, step: 0.05)
+        } valueLabel: {
+            Text(String(format: "%.2f", pipeline.smoothingCenterFloor)).font(.caption).foregroundColor(.gray).frame(width: 40, alignment: .trailing)
+        }
+        .disabled(!pipeline.smoothingEnabled)
     }
 
     private var rtmpUrlRow: some View {

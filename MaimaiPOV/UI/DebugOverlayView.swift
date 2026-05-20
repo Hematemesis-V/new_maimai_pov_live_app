@@ -113,12 +113,20 @@ struct DebugOverlayView: View {
             Divider().background(Color.white.opacity(0.2)).padding(.vertical, 2)
 
             sectionHeader("TRACK")
-            infoRow("State", debug.trackState,
-                    color: debug.trackState == "tracking" ? .green :
+            infoRow("State", debug.trackState == "tracking" && debug.trackTrust < 1.0 ? "tracking*" : debug.trackState,
+                    color: debug.trackState == "tracking" ? (debug.trackTrust < 1.0 ? .yellow : .green) :
                            debug.trackState == "recenter" ? .yellow : .orange)
             infoRow("Crop", String(format: "%.0f×%.0f @%.0f,%.0f",
                 debug.trackCropW, debug.trackCropH,
                 debug.trackCx, debug.trackCy))
+            infoRow("AR", String(format: "%.3f", debug.trackAspectRatio),
+                    color: abs(debug.trackAspectRatio - 1.0) < 0.02 ? .green :
+                           abs(debug.trackAspectRatio - 1.0) < 0.05 ? .yellow : .red)
+            infoRow("Trust", String(format: "%.2f", debug.trackTrust),
+                    color: debug.trackTrust > 0.8 ? .green :
+                           debug.trackTrust > 0.3 ? .yellow : .red)
+            infoRow("Raw", String(format: "%.0f×%.0f", debug.trackRawW, debug.trackRawH))
+            infoRow("Smooth", String(format: "%.0f", debug.trackSmoothSize))
             infoRow("Ratio", String(format: "%.2f", debug.trackTargetRatio))
             infoRow("Recenter", String(format: "%.2f", debug.trackRecenterSpeed))
 

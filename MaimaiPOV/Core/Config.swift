@@ -124,6 +124,58 @@ enum Config {
     }
     static let defaultConfidenceThreshold: Float = 0.6
 
+    static let defaultSmoothingEnabled: Bool = true
+    static let defaultSmoothingBaseAlpha: Double = 0.3
+    static let defaultSmoothingMinDeviation: Double = 0.02
+    static let defaultSmoothingMaxDeviation: Double = 0.05
+    static let defaultSmoothingCenterFloor: Double = 0.3
+
+    static var smoothingEnabled: Bool {
+        get {
+            guard UserDefaults.standard.object(forKey: smoothingEnabledKey) != nil else {
+                return defaultSmoothingEnabled
+            }
+            return UserDefaults.standard.bool(forKey: smoothingEnabledKey)
+        }
+        set { UserDefaults.standard.set(newValue, forKey: smoothingEnabledKey) }
+    }
+    static var smoothingBaseAlpha: Double {
+        get {
+            guard UserDefaults.standard.object(forKey: smoothingBaseAlphaKey) != nil else {
+                return defaultSmoothingBaseAlpha
+            }
+            return UserDefaults.standard.double(forKey: smoothingBaseAlphaKey)
+        }
+        set { UserDefaults.standard.set(newValue, forKey: smoothingBaseAlphaKey) }
+    }
+    static var smoothingMinDeviation: Double {
+        get {
+            guard UserDefaults.standard.object(forKey: smoothingMinDeviationKey) != nil else {
+                return defaultSmoothingMinDeviation
+            }
+            return UserDefaults.standard.double(forKey: smoothingMinDeviationKey)
+        }
+        set { UserDefaults.standard.set(newValue, forKey: smoothingMinDeviationKey) }
+    }
+    static var smoothingMaxDeviation: Double {
+        get {
+            guard UserDefaults.standard.object(forKey: smoothingMaxDeviationKey) != nil else {
+                return defaultSmoothingMaxDeviation
+            }
+            return UserDefaults.standard.double(forKey: smoothingMaxDeviationKey)
+        }
+        set { UserDefaults.standard.set(newValue, forKey: smoothingMaxDeviationKey) }
+    }
+    static var smoothingCenterFloor: Double {
+        get {
+            guard UserDefaults.standard.object(forKey: smoothingCenterFloorKey) != nil else {
+                return defaultSmoothingCenterFloor
+            }
+            return UserDefaults.standard.double(forKey: smoothingCenterFloorKey)
+        }
+        set { UserDefaults.standard.set(newValue, forKey: smoothingCenterFloorKey) }
+    }
+
     // Stabilizer defaults
     static let defaultFov: Float = 100.0
     static var fov: Float {
@@ -250,6 +302,11 @@ enum Config {
     private static let yoloEnabledKey = "com.maimai.yoloEnabled"
     private static let trackTargetRatioKey = "com.maimai.trackTargetRatio"
     private static let trackRecenterSpeedKey = "com.maimai.trackRecenterSpeed"
+    private static let smoothingEnabledKey = "com.maimai.smoothingEnabled"
+    private static let smoothingBaseAlphaKey = "com.maimai.smoothingBaseAlpha"
+    private static let smoothingMinDeviationKey = "com.maimai.smoothingMinDeviation"
+    private static let smoothingMaxDeviationKey = "com.maimai.smoothingMaxDeviation"
+    private static let smoothingCenterFloorKey = "com.maimai.smoothingCenterFloor"
 
     // Video encoding
     static let videoBitrate: Int = 4_000_000

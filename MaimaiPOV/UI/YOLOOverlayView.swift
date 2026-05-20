@@ -106,6 +106,30 @@ struct YOLOOverlayView: View {
             Text(conf).font(.system(size: 10, weight: .bold)).foregroundColor(.white),
             at: CGPoint(x: rect.minX + 5, y: rect.minY - 12)
         )
+
+        let sCx = debug.trackCx
+        let sCy = debug.trackCy
+        let sSize = debug.trackSmoothSize
+        let sHalf = sSize / 2.0
+
+        let smoothRect = CGRect(
+            x: CGFloat(sCx - sHalf) * scaleX,
+            y: CGFloat(sCy - sHalf) * scaleY,
+            width: CGFloat(sSize) * scaleX,
+            height: CGFloat(sSize) * scaleY
+        )
+
+        context.stroke(
+            Path(smoothRect),
+            with: .color(.green),
+            lineWidth: 1.5
+        )
+
+        let trustStr = String(format: "T%.0f", debug.trackTrust * 100)
+        context.draw(
+            Text(trustStr).font(.system(size: 9, weight: .bold)).foregroundColor(.green),
+            at: CGPoint(x: smoothRect.minX + 5, y: smoothRect.maxY + 4)
+        )
     }
 }
 

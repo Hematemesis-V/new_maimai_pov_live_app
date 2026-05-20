@@ -52,6 +52,11 @@ class DebugInfoManager: ObservableObject {
     @Published var trackState: String = "idle"
     @Published var trackTargetRatio: Float = Float(Config.defaultTargetRatio)
     @Published var trackRecenterSpeed: Float = Float(Config.defaultRecenterSpeed)
+    @Published var trackRawW: Float = 0
+    @Published var trackRawH: Float = 0
+    @Published var trackSmoothSize: Float = 0
+    @Published var trackTrust: Float = 1.0
+    @Published var trackAspectRatio: Float = 1.0
 
     @Published var logMessages: [String] = []
     @Published var streamInfo: String = "--"
@@ -87,6 +92,11 @@ class DebugInfoManager: ObservableObject {
         var trackCropW: Float = 0
         var trackCropH: Float = 0
         var trackState: String = "idle"
+        var trackRawW: Float = 0
+        var trackRawH: Float = 0
+        var trackSmoothSize: Float = 0
+        var trackTrust: Float = 1.0
+        var trackAspectRatio: Float = 1.0
         var pipelineLagMs: Double = 0
         var audioQueueDepth: Int = 0
     }
@@ -170,6 +180,11 @@ class DebugInfoManager: ObservableObject {
         trackCropW = data.trackCropW
         trackCropH = data.trackCropH
         trackState = data.trackState
+        trackRawW = data.trackRawW
+        trackRawH = data.trackRawH
+        trackSmoothSize = data.trackSmoothSize
+        trackTrust = data.trackTrust
+        trackAspectRatio = data.trackAspectRatio
         pipelineLagMs = data.pipelineLagMs
         audioQueueDepth = data.audioQueueDepth
     }

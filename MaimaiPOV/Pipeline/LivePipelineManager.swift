@@ -38,6 +38,12 @@ class LivePipelineManager: ObservableObject {
     @Published var trackTargetRatio: Double = Config.trackTargetRatio
     @Published var trackRecenterSpeed: Double = Config.trackRecenterSpeed
 
+    @Published var smoothingEnabled: Bool = Config.smoothingEnabled
+    @Published var smoothingBaseAlpha: Double = Config.smoothingBaseAlpha
+    @Published var smoothingMinDeviation: Double = Config.smoothingMinDeviation
+    @Published var smoothingMaxDeviation: Double = Config.smoothingMaxDeviation
+    @Published var smoothingCenterFloor: Double = Config.smoothingCenterFloor
+
     @Published var currentFPS: Double = 0
 
     let camera = CameraCaptureManager()
@@ -133,6 +139,11 @@ class LivePipelineManager: ObservableObject {
 
         bboxTracker.targetRatio = Float(trackTargetRatio)
         bboxTracker.recenterSpeed = Float(trackRecenterSpeed)
+        bboxTracker.smoothingEnabled = smoothingEnabled
+        bboxTracker.smoothingBaseAlpha = Float(smoothingBaseAlpha)
+        bboxTracker.smoothingMinDeviation = Float(smoothingMinDeviation)
+        bboxTracker.smoothingMaxDeviation = Float(smoothingMaxDeviation)
+        bboxTracker.smoothingCenterFloor = Float(smoothingCenterFloor)
         debug.trackTargetRatio = Float(trackTargetRatio)
         debug.trackRecenterSpeed = Float(trackRecenterSpeed)
 
@@ -293,6 +304,11 @@ class LivePipelineManager: ObservableObject {
                     snapshot.trackCropW = track.cropW
                     snapshot.trackCropH = track.cropH
                     snapshot.trackState = track.state
+                    snapshot.trackRawW = track.rawW
+                    snapshot.trackRawH = track.rawH
+                    snapshot.trackSmoothSize = track.smoothSize
+                    snapshot.trackTrust = track.trust
+                    snapshot.trackAspectRatio = track.aspectRatio
                     self.debug.stageFrameData(snapshot)
                 }
 
@@ -495,6 +511,31 @@ class LivePipelineManager: ObservableObject {
         Config.trackRecenterSpeed = trackRecenterSpeed
         bboxTracker.recenterSpeed = Float(trackRecenterSpeed)
         debug.trackRecenterSpeed = Float(trackRecenterSpeed)
+    }
+
+    @MainActor func updateSmoothingEnabled() {
+        Config.smoothingEnabled = smoothingEnabled
+        bboxTracker.smoothingEnabled = smoothingEnabled
+    }
+
+    @MainActor func updateSmoothingBaseAlpha() {
+        Config.smoothingBaseAlpha = smoothingBaseAlpha
+        bboxTracker.smoothingBaseAlpha = Float(smoothingBaseAlpha)
+    }
+
+    @MainActor func updateSmoothingMinDeviation() {
+        Config.smoothingMinDeviation = smoothingMinDeviation
+        bboxTracker.smoothingMinDeviation = Float(smoothingMinDeviation)
+    }
+
+    @MainActor func updateSmoothingMaxDeviation() {
+        Config.smoothingMaxDeviation = smoothingMaxDeviation
+        bboxTracker.smoothingMaxDeviation = Float(smoothingMaxDeviation)
+    }
+
+    @MainActor func updateSmoothingCenterFloor() {
+        Config.smoothingCenterFloor = smoothingCenterFloor
+        bboxTracker.smoothingCenterFloor = Float(smoothingCenterFloor)
     }
 
     @MainActor func updateReadoutTime() {

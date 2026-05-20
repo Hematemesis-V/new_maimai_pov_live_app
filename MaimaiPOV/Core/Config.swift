@@ -280,6 +280,17 @@ enum Config {
     static let defaultSyncOffsetMs: Double = -25.0
     static let defaultReadoutTimeMs: Double = 9.18
     
+    static let defaultOverlayEnabled: Bool = false
+    static var overlayEnabled: Bool {
+        get {
+            guard UserDefaults.standard.object(forKey: overlayEnabledKey) != nil else {
+                return defaultOverlayEnabled
+            }
+            return UserDefaults.standard.bool(forKey: overlayEnabledKey)
+        }
+        set { UserDefaults.standard.set(newValue, forKey: overlayEnabledKey) }
+    }
+
     // UserDefaults keys
     private static let syncOffsetKey = "com.maimai.syncOffsetMs"
     private static let readoutTimeKey = "com.maimai.readoutTimeMs"
@@ -307,6 +318,7 @@ enum Config {
     private static let smoothingMinDeviationKey = "com.maimai.smoothingMinDeviation"
     private static let smoothingMaxDeviationKey = "com.maimai.smoothingMaxDeviation"
     private static let smoothingCenterFloorKey = "com.maimai.smoothingCenterFloor"
+    private static let overlayEnabledKey = "com.maimai.overlayEnabled"
 
     // Video encoding
     static let videoBitrate: Int = 4_000_000

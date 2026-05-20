@@ -79,6 +79,7 @@ struct Phase2View: View {
         .onChange(of: pipeline.smoothingMinDeviation) { _ in pipeline.updateSmoothingMinDeviation() }
         .onChange(of: pipeline.smoothingMaxDeviation) { _ in pipeline.updateSmoothingMaxDeviation() }
         .onChange(of: pipeline.smoothingCenterFloor) { _ in pipeline.updateSmoothingCenterFloor() }
+        .onChange(of: pipeline.overlayEnabled) { _ in pipeline.updateOverlayEnabled() }
         .onChange(of: pipeline.streamManager.isStreaming) { streaming in
             if streaming {
                 pipeline.debug.isDetailVisible = false
@@ -273,6 +274,7 @@ struct Phase2View: View {
             yoloToggleRow
             yoloOverlayToggleRow
             yoloOverlayScaleRow
+            overlayToggleRow
 
             Button {
                 withAnimation {
@@ -559,6 +561,17 @@ struct Phase2View: View {
         .disabled(!pipeline.yoloOverlayEnabled)
         .onChange(of: pipeline.yoloOverlayScale) { _ in
             pipeline.updateYoloOverlayScale()
+        }
+    }
+
+    private var overlayToggleRow: some View {
+        HStack {
+            Text("Overlay").font(.caption).frame(width: 55, alignment: .leading)
+            Toggle("", isOn: $pipeline.overlayEnabled).labelsHidden()
+            Spacer()
+            Text(pipeline.overlayEnabled ? "ON" : "OFF")
+                .font(.caption2)
+                .foregroundColor(pipeline.overlayEnabled ? .green : .red)
         }
     }
 

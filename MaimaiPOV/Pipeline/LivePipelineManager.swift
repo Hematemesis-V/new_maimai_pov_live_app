@@ -46,6 +46,8 @@ class LivePipelineManager: ObservableObject {
 
     @Published var currentFPS: Double = 0
 
+    @Published var overlayEnabled: Bool = Config.overlayEnabled
+
     let camera = CameraCaptureManager()
     let debug = DebugInfoManager.shared
     let device: MTLDevice = MTLCreateSystemDefaultDevice()!
@@ -56,6 +58,7 @@ class LivePipelineManager: ObservableObject {
     var stabilizer: MetalStabilizer?
     var yoloDetector: YOLODetector?
     var cropRenderer: CropRenderer?
+    var overlayCompositor: OverlayCompositor?
     var bboxTracker = BBoxTracker()
     var latestTrackOutput: BBoxTracker.TrackOutput?
 
@@ -130,6 +133,8 @@ class LivePipelineManager: ObservableObject {
 
         let cropR = CropRenderer(device: device, commandQueue: sharedCommandQueue)
         self.cropRenderer = cropR
+
+        self.overlayCompositor = OverlayCompositor(device: device)
 
         ioSurfacePool = IOSurfaceOutputPool(
             device: device,
@@ -316,12 +321,44 @@ class LivePipelineManager: ObservableObject {
                    let cr = self.cropRenderer,
                    let writeBuffer = pool.nextWriteBuffer() {
                     let timestamp = CMTime(seconds: alignedTime, preferredTimescale: 1000000000)
-                    cr.process(
-                        stabTexture: stab.outputTexture,
-                        cx: track.cx, cy: track.cy,
-                        cropW: track.cropW, cropH: track.cropH,
-                        outputTexture: writeBuffer.texture
-                    ) { [weak self] in
+
+                    guard let cmdBuf = self.sharedCommandQueue.makeCommandBuffer(),
+                          let encoder = cmdBuf.makeComputeCommandEncoder() else {
+                        cr.process(
+                            stabTexture: stab.outputTexture,
+                            cx: track.cx, cy: track.cy,
+                            cropW: track.cropW, cropH: track.cropH,
+                            outputTexture: writeBuffer.texture
+                        ) { [weak self] in
+                            self?.pipelineQueue.async {
+                                guard let self = self else { return }
+                                self.streamFrameCount += 1
+                                let pipelineLatencyMs = (CACurrentMediaTime() - pipelineEnterTime) * 1000.0
+                                self.onStreamBufferAvailable?(writeBuffer.pixelBuffer, timestamp)
+                                self.streamManager.appendVideo(pixelBuffer: writeBuffer.pixelBuffer, timestamp: timestamp)
+                                DispatchQueue.main.async {
+                                    self.lagMs = pipelineLatencyMs
+                                    self.debug.stageLagData(ms: pipelineLatencyMs, audioDepth: self.streamManager.audioSyncQueueDepth)
+                                }
+                            }
+                        }
+                        return
+                    }
+
+                    cr.encode(into: encoder,
+                              stabTexture: stab.outputTexture,
+                              cx: track.cx, cy: track.cy,
+                              cropW: track.cropW, cropH: track.cropH,
+                              outputTexture: writeBuffer.texture)
+
+                    if let overlay = self.overlayCompositor,
+                       overlay.enabled, overlay.overlayTexture != nil {
+                        overlay.encode(into: encoder, outputTexture: writeBuffer.texture)
+                    }
+
+                    encoder.endEncoding()
+
+                    cmdBuf.addCompletedHandler { [weak self] _ in
                         self?.pipelineQueue.async {
                             guard let self = self else { return }
                             self.streamFrameCount += 1
@@ -334,6 +371,7 @@ class LivePipelineManager: ObservableObject {
                             }
                         }
                     }
+                    cmdBuf.commit()
                 } else if let cr = self.cropRenderer {
                     if let track = self.latestTrackOutput {
                         cr.process(stabTexture: stab.outputTexture,
@@ -541,6 +579,11 @@ class LivePipelineManager: ObservableObject {
     @MainActor func updateReadoutTime() {
         Config.readoutTimeMs = readoutTimeMs
         stabilizer?.useRollingShutter = readoutTimeMs > 0
+    }
+
+    @MainActor func updateOverlayEnabled() {
+        Config.overlayEnabled = overlayEnabled
+        overlayCompositor?.enabled = overlayEnabled
     }
 
     private func startTemperatureTimer() {
